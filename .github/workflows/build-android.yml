@@ -1,9 +1,12 @@
-name: Build MehmanshahrVpn APK
+name: Build and Release MehmanshahrVpn APKs
 
 on:
   push:
     branches: [ "**" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -34,7 +37,6 @@ jobs:
             rm -rf "$tmp"
           done
           
-          # Find ndk-build
           NDK_BUILD=$(find $ANDROID_SDK_ROOT/ndk -name ndk-build | sort -V | tail -1)
           if [ -z "$NDK_BUILD" ]; then
             NDK_BUILD=$(find $ANDROID_HOME/ndk -name ndk-build | sort -V | tail -1)
@@ -47,14 +49,51 @@ jobs:
           for abi in armeabi-v7a arm64-v8a x86_64; do cp "$work/libs/$abi/libhev-socks5-tunnel.so" "android/app/src/main/jniLibs/$abi/"; done
           rm -rf "$work"
 
-      - name: Build Android Debug APK
+      - name: Build Android Debug APKs
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK artifact
+      - name: Prepare Release APK Files
+        run: |
+          mkdir -p release_apks
+          cd android/app/build/outputs/apk/debug
+          for f in *.apk; do
+            echo "Processing $f"
+            if [[ "$f" == *"arm64-v8a"* ]]; then
+              cp "$f" ../../../../../release_apks/MehmanshahrVpn-v2.1.1-ARM64-v8a.apk
+            elif [[ "$f" == *"armeabi-v7a"* ]]; then
+              cp "$f" ../../../../../release_apks/MehmanshahrVpn-v2.1.1-ARMv7.apk
+            elif [[ "$f" == *"universal"* ]]; then
+              cp "$f" ../../../../../release_apks/MehmanshahrVpn-v2.1.1-Universal.apk
+            else
+              cp "$f" ../../../../../release_apks/"$f"
+            fi
+          done
+          cd ../../../../../
+          ls -la release_apks
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MehmanshahrVpn-APK
-          path: android/app/build/outputs/apk/**/*.apk
+          name: MehmanshahrVpn-Release-APKs
+          path: release_apks/*.apk
+
+      - name: Publish to GitHub Releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete v2.1.1 --yes || true
+          git tag -d v2.1.1 || true
+          gh release create v2.1.1 release_apks/*.apk \
+            --title "MehmanshahrVpn v2.1.1" \
+            --notes "### MehmanshahrVpn Android Release
+            - **رمز ورود (فقط بار اول):** \`09372550259\`
+            - **توضیحات:** برای دریافت رمز عبور به مغازه گلدوزی خلیلی مراجعه کنید
+            - **توسعه دهنده:** ساخته شده توسط Hossein Akhlaghi
+            
+            #### فایل‌های دانلودی:
+            - \`MehmanshahrVpn-v2.1.1-ARM64-v8a.apk\` : مخصوص گوشی‌های جدید (۶۴ بیتی)
+            - \`MehmanshahrVpn-v2.1.1-ARMv7.apk\` : مخصوص گوشی‌های قدیمی‌تر (۳۲ بیتی)
+            - \`MehmanshahrVpn-v2.1.1-Universal.apk\` : نسخه عمومی سازگار با تمام گوشی‌ها"
