@@ -69,7 +69,7 @@ public final class AetherVpnService extends VpnService {
     public static final String ACTION_STATS = "com.firstham.aethergui.STATS";
     public static final String ACTION_CLEAR_LOGS = "com.firstham.aethergui.CLEAR_LOGS";
     public static final String ACTION_SET_LAN = "com.firstham.aethergui.SET_LAN";
-    public static final String INTERNAL_PERMISSION = "io.github.hamvex.aethergui.permission.INTERNAL";
+    public static final String INTERNAL_PERMISSION = "com.mehmanshahr.vpn.permission.INTERNAL";
     private static final String CHANNEL_ID = "aether_vpn";
     private static final String ALERT_CHANNEL_ID = "aether_vpn_alerts";
     private static final int NOTIFICATION_ID = 1819;

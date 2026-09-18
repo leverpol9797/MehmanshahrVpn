@@ -2,7 +2,6 @@ package com.firstham.aethergui;
 
 import android.animation.ValueAnimator;
 import android.content.BroadcastReceiver;
-import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -61,7 +60,7 @@ public final class MainActivity extends AppCompatActivity {
     private static final int APPS_REQUEST = 43;
     private static final int EXPORT_REQUEST = 44;
     private static final int IMPORT_REQUEST = 45;
-    private static final String INTERNAL_PERMISSION = "io.github.hamvex.aethergui.permission.INTERNAL";
+    private static final String INTERNAL_PERMISSION = "com.mehmanshahr.vpn.permission.INTERNAL";
     /** Taps closer together than this are swallowed so a burst cannot restart the tunnel. */
     private static final long CONNECT_DEBOUNCE_MS = 900L;
     /** How long the UI may show "Checking" before it gives up on the service answering. */
@@ -217,11 +216,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private void setupNavigation() {
         binding.toolbar.setNavigationOnClickListener(v -> binding.root.openDrawer(GravityCompat.START));
-        binding.toolbar.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() != R.id.action_telegram) return false;
-            openTelegram();
-            return true;
-        });
+        binding.toolbar.setOnMenuItemClickListener(item -> false);
         binding.navigationView.setNavigationItemSelectedListener(item -> { selectPage(item); binding.root.closeDrawer(GravityCompat.START); return true; });
         binding.navigationView.setCheckedItem(R.id.nav_connect);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -285,7 +280,7 @@ public final class MainActivity extends AppCompatActivity {
         binding.importSettingsButton.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE), IMPORT_REQUEST));
         binding.notificationSettingsButton.setOnClickListener(v -> openNotificationSettings());
         binding.addTileButton.setOnClickListener(v -> requestQuickSettingsTile());
-        binding.telegramCard.setOnClickListener(v -> openTelegram());
+        // Telegram card removed
     }
 
     private void restoreSettings() {
@@ -576,18 +571,6 @@ public final class MainActivity extends AppCompatActivity {
         }
         try { startActivity(new Intent("android.settings.QUICK_SETTINGS_SETTINGS")); }
         catch (Exception ignored) { Toast.makeText(this, R.string.tile_add_manual, Toast.LENGTH_LONG).show(); }
-    }
-    private void openTelegram() {
-        Intent direct = new Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=hamvex"));
-        for (String packageName : new String[]{"org.telegram.messenger", "org.telegram.messenger.web"}) {
-            try {
-                direct.setPackage(packageName);
-                startActivity(direct);
-                return;
-            } catch (ActivityNotFoundException ignored) { }
-        }
-        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/hamvex"))); }
-        catch (ActivityNotFoundException ignored) { Toast.makeText(this, R.string.telegram_fallback, Toast.LENGTH_SHORT).show(); }
     }
     private int selectedIndex(MaterialAutoCompleteTextView view) { Object tag = view.getTag(); return tag instanceof Integer ? (Integer) tag : 0; }
     private String protocolLabel(String protocol) { if ("wg".equals(protocol)) return "WireGuard"; if ("gool".equals(protocol)) return "gool / WARP-in-WARP"; if ("masque".equals(protocol)) return "MASQUE"; return protocol; }
