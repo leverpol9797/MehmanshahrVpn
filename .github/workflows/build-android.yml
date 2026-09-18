@@ -18,14 +18,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: '27.2.12479018'
-
       - name: Fetch native VPN core assets
         run: |
           mkdir -p android/app/src/main/jniLibs
@@ -41,9 +33,17 @@ jobs:
             cp "$core" "android/app/src/main/jniLibs/$abi/libaether.so"
             rm -rf "$tmp"
           done
+          
+          # Find ndk-build
+          NDK_BUILD=$(find $ANDROID_SDK_ROOT/ndk -name ndk-build | sort -V | tail -1)
+          if [ -z "$NDK_BUILD" ]; then
+            NDK_BUILD=$(find $ANDROID_HOME/ndk -name ndk-build | sort -V | tail -1)
+          fi
+          echo "Using ndk-build: $NDK_BUILD"
+
           work=$(mktemp -d)
           git clone --quiet --branch 2.16.0 --depth 1 --recurse-submodules https://github.com/heiher/hev-socks5-tunnel.git "$work/hev"
-          $ANDROID_NDK_ROOT/ndk-build NDK_PROJECT_PATH="$work/hev" APP_BUILD_SCRIPT="$work/hev/Android.mk" NDK_APPLICATION_MK="$work/hev/Application.mk" 'APP_ABI=armeabi-v7a arm64-v8a x86_64' 'APP_CFLAGS=-O3 -DPKGNAME=hev/htproxy' NDK_LIBS_OUT="$work/libs" NDK_OUT="$work/obj" -j4
+          "$NDK_BUILD" NDK_PROJECT_PATH="$work/hev" APP_BUILD_SCRIPT="$work/hev/Android.mk" NDK_APPLICATION_MK="$work/hev/Application.mk" 'APP_ABI=armeabi-v7a arm64-v8a x86_64' 'APP_CFLAGS=-O3 -DPKGNAME=hev/htproxy' NDK_LIBS_OUT="$work/libs" NDK_OUT="$work/obj" -j4
           for abi in armeabi-v7a arm64-v8a x86_64; do cp "$work/libs/$abi/libhev-socks5-tunnel.so" "android/app/src/main/jniLibs/$abi/"; done
           rm -rf "$work"
 
@@ -57,4 +57,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MehmanshahrVpn-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/**/*.apk
