@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="14dp" android:background="@drawable/widget_card_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:id="@+id/widget_name" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/widget_text" android:textSize="15sp" android:textStyle="bold" />
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:gravity="center_vertical">
+                <ImageView android:id="@+id/widget_status_dot" android:layout_width="8dp" android:layout_height="8dp" android:scaleType="centerInside" android:src="@drawable/widget_status_dot_disconnected" android:contentDescription="@null" />
+                <TextView android:id="@+id/widget_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/widget_muted" android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+        <ImageView android:id="@+id/widget_logo" android:layout_width="32dp" android:layout_height="32dp" android:contentDescription="@null" />
+    </LinearLayout>
+    <Button android:id="@+id/widget_action" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="12dp" android:background="@drawable/widget_action_background" android:paddingLeft="16dp" android:paddingRight="16dp" android:textColor="@color/on_hero" android:textSize="15sp" android:textStyle="bold" android:textAllCaps="true" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:orientation="horizontal">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Upload" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/widget_upload" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/widget_accent" android:textSize="12sp" android:textStyle="bold" /></LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ping" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/widget_ping" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/widget_accent" android:textSize="12sp" android:textStyle="bold" /></LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Download" android:textColor="@color/widget_muted" android:textSize="10sp" /><TextView android:id="@+id/widget_download" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/widget_accent" android:textSize="12sp" android:textStyle="bold" /></LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Location" android:textColor="@color/widget_muted" android:textSize="10sp" />
+        <TextView android:id="@+id/widget_location" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:ellipsize="end" android:maxLines="1" android:textColor="@color/widget_text" android:textSize="12sp" android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>

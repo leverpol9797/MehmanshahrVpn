@@ -1,0 +1,36 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+# Fetched, verified third-party binaries - never source-controlled. Each one is
+# downloaded by a scripts/fetch-*.ps1 that refuses to continue unless the digest
+# matches the constant the application itself enforces at runtime
+# (process.rs AETHER_SHA256, routing.rs XRAY_SHA256 / WINTUN_SHA256). Committing
+# any of them would create a second, unverified source of truth that could be
+# used in place of a freshly verified download.
+src-tauri/binaries/*.exe
+src-tauri/binaries/*.dll
+.npm-cache/
+.env
+*.log
+.DS_Store
+.vscode/
+.idea/
+release-v*/
+release/
+portable/
+android/.gradle/
+android/local.properties
+android/app/build/
+android/app/src/main/jniLibs/**/*.so
+android/.android-signing/
+
+# Never commit Aether identity or credential material.
+aether*.toml
+*-secondary.toml
+*-lastconn.toml
+*.pem
+*.key
+
+# Fix-build backup artifacts (binaries are not source)
+.fixbuild-backup/

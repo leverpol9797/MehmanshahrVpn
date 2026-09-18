@@ -1,0 +1,91 @@
+{
+  "_comment": [
+    "Pinned upstream digests for the Aether core (PROMPT.md PHASE 6).",
+    "",
+    "The release archives and their .sha256 companions live at the same base URL, so",
+    "verifying an archive against the checksum file beside it proves only that the transfer",
+    "was intact - anyone able to replace the release can replace both. These values are",
+    "committed here so the expected digest comes from this repository at review time rather",
+    "than from the server being verified.",
+    "",
+    "Provenance, recorded in security-evidence/logs/upstream-provenance.txt: 'archives' are",
+    "the asset digests GitHub itself reports through the releases API for tag v1.9.0",
+    "(published 2026-09-04T17:17:48Z), which is a different source from the release's own",
+    ".sha256 files. 'binary' is the SHA-256 of the executable extracted from the archive.",
+    "",
+    "For the Windows zip that value is what src-tauri/src/process.rs pins as AETHER_SHA256 and",
+    "refuses to launch without, and it has been verified against the bytes on disk. The three",
+    "Android values were established the same way and are not independent of 'archives': each",
+    "was obtained by extracting an archive whose digest had already matched the API-sourced pin",
+    "above, so it inherits that archive's trust rather than asserting anything new. They are",
+    "recorded so the .so actually copied into the APK can be checked at build time without a",
+    "second download, and so the shipped native payload has a reviewable expected digest at all",
+    "- android/app/src/main/jniLibs/**/*.so is .gitignore'd, so before this it had none.",
+    "Verified 2026-09-02: all three shipped jniLibs .so files are byte-identical to the binary",
+    "inside the matching pinned archive (security-evidence/logs/phase6-android-native.txt).",
+    "",
+    "Both platforms are now on v1.9.0. Windows moved from v1.8.0 to v1.9.0 on 2026-09-10 so",
+    "the warp-in-warp endpoints the GUI caches can be handed back to the core through",
+    "AETHER_WIW_PEERS, which v1.8.0 has no equivalent for; the Windows digests below were",
+    "re-derived from a fresh download and cross-checked against the releases API on that date.",
+    "'androidVersion' and its separate digest maps are kept because scripts/",
+    "fetch-android-assets.ps1 reads them, and because they let one platform move ahead of the",
+    "other again without disturbing the payload of the one that stays. While the two versions",
+    "agree, the android* maps below duplicate the Android entries in 'archives' and 'binary';",
+    "if they ever disagree, the android* maps are the authority for Android.",
+    "Updating either core means changing its version and every digest in one reviewed commit.",
+    "Building against any other version requires the caller to supply the digest",
+    "explicitly via AETHER_EXPECTED_SHA256; the fetch scripts will not fall back to the",
+    "server's own checksum file.",
+    "",
+    "This is data rather than a .ps1 so it needs no execution policy to read and can be",
+    "consumed by the release manifest and SBOM tooling as well as by the fetch scripts."
+  ],
+  "version": "v1.9.0",
+  "published": "2026-09-04T17:17:48Z",
+  "repository": "https://github.com/CluvexStudio/Aether",
+  "archives": {
+    "aether-windows-x86_64.zip": "5c64be2f2967469c53abdbec82599cb3c2ef005b8ef8efed79ba235d4ed3eb8d",
+    "aether-android-armv7.tar.gz": "d49ee19423a33d905fb4fef3f163d2e3c88e5223940e0f03dbe6324bb2c7dcdb",
+    "aether-android-arm64.tar.gz": "a5a488b8cf05b3e83c28ca35cef78334130411c8df5314850e816b900e9d6cb9",
+    "aether-android-x86_64.tar.gz": "0c4dfcea54b5a39c0a3a52473d1fb9c2ff5c4ed92de5d240f84f18f54425f961"
+  },
+  "binary": {
+    "aether-windows-x86_64.zip": "ee400806bf73fe16e655e6478eb7442c2c4e0576c4c8ce1913ac474e846b36cd",
+    "aether-android-armv7.tar.gz": "e93d13c270f6636195a6262ec642235d75b2e6a15fe9e5640978b5483407da6a",
+    "aether-android-arm64.tar.gz": "892d4fa467b32dd447791e08f518238ceeb0ab16c702d302077851565d0b8829",
+    "aether-android-x86_64.tar.gz": "eb2bf174dbea1095a890f9e1f358dbcb5aa62fc00c039e8becc89f0f212e7327"
+  },
+  "androidVersion": "v1.9.0",
+  "androidPublished": "2026-09-04T17:17:48Z",
+  "androidArchives": {
+    "aether-android-armv7.tar.gz": "d49ee19423a33d905fb4fef3f163d2e3c88e5223940e0f03dbe6324bb2c7dcdb",
+    "aether-android-arm64.tar.gz": "a5a488b8cf05b3e83c28ca35cef78334130411c8df5314850e816b900e9d6cb9",
+    "aether-android-x86_64.tar.gz": "0c4dfcea54b5a39c0a3a52473d1fb9c2ff5c4ed92de5d240f84f18f54425f961"
+  },
+  "androidBinary": {
+    "aether-android-armv7.tar.gz": "e93d13c270f6636195a6262ec642235d75b2e6a15fe9e5640978b5483407da6a",
+    "aether-android-arm64.tar.gz": "892d4fa467b32dd447791e08f518238ceeb0ab16c702d302077851565d0b8829",
+    "aether-android-x86_64.tar.gz": "eb2bf174dbea1095a890f9e1f358dbcb5aa62fc00c039e8becc89f0f212e7327"
+  },
+  "hev_socks5_tunnel": {
+    "_comment": [
+      "Built from source rather than downloaded, so there is no upstream archive digest to pin.",
+      "The trust anchor is the commit: fetch-android-assets.ps1 clones the tag, then refuses to",
+      "continue unless HEAD is exactly this commit, and checks submodule state. The resulting",
+      ".so digests are recorded as observed output of that build on the release host - they are",
+      "NOT an independent pin, because an ndk-build output depends on the NDK and host, and this",
+      "project has not established that the build is bit-reproducible. Treat a mismatch as a",
+      "signal to re-derive, not as proof of tampering."
+    ],
+    "version": "2.16.0",
+    "commit": "0a05221275a51a884d93328c55fc2fbc9e9b6974",
+    "repository": "https://github.com/heiher/hev-socks5-tunnel",
+    "ndk": "27.2.12479018",
+    "observed": {
+      "armeabi-v7a": "360b348074cc43fe09999bb0a3cc1cff00c53fd60286852fef402b43dd04f4ff",
+      "arm64-v8a": "a4a64a6da7501eae6a71bc26afa6a914a4cb9465765b00c1750c86acdb3c8560",
+      "x86_64": "010e5fc222dbfa4db4f6474ec6f3abbece429192778f1d0aa8c862041c0ce1e0"
+    }
+  }
+}

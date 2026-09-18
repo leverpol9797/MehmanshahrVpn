@@ -1,0 +1,9 @@
+{
+  "sourceRepository": "https://github.com/Psiphon-Labs/psiphon-tunnel-core.git",
+  "sourceCommit": "38148cd835e07d688dbb6b30ae24ad2fd0e5d847",
+  "consoleClientTarget": "windows-amd64",
+  "goToolchain": "go1.26.2",
+  "buildCommand": "GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags '-s -w' ./ConsoleClient",
+  "binarySha256": "fc52730ba75425c20125b621ed9889b221d26e82631603501e49f1ce85bd039b",
+  "peMachine": "0x8664"
+}
