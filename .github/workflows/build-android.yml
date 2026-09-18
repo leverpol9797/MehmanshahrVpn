@@ -58,21 +58,25 @@ jobs:
       - name: Prepare Release APK Files
         run: |
           mkdir -p release_apks
-          cd android/app/build/outputs/apk/debug
-          for f in *.apk; do
-            echo "Processing $f"
-            if [[ "$f" == *"arm64-v8a"* ]]; then
-              cp "$f" ../../../../../release_apks/MehmanshahrVpn-v2.1.1-ARM64-v8a.apk
-            elif [[ "$f" == *"armeabi-v7a"* ]]; then
-              cp "$f" ../../../../../release_apks/MehmanshahrVpn-v2.1.1-ARMv7.apk
-            elif [[ "$f" == *"universal"* ]]; then
-              cp "$f" ../../../../../release_apks/MehmanshahrVpn-v2.1.1-Universal.apk
+          find android/app/build/outputs/apk -type f -name '*.apk' -print
+          apk_dir="android/app/build/outputs/apk/debug"
+          for f in "$apk_dir"/*.apk; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            echo "Processing $name"
+            if [[ "$name" == *"arm64-v8a"* ]]; then
+              cp "$f" release_apks/MehmanshahrVpn-v2.1.1-ARM64-v8a.apk
+            elif [[ "$name" == *"armeabi-v7a"* ]]; then
+              cp "$f" release_apks/MehmanshahrVpn-v2.1.1-ARMv7.apk
+            elif [[ "$name" == *"universal"* ]]; then
+              cp "$f" release_apks/MehmanshahrVpn-v2.1.1-Universal.apk
             else
-              cp "$f" ../../../../../release_apks/"$f"
+              cp "$f" "release_apks/$name"
             fi
           done
-          cd ../../../../../
           ls -la release_apks
+          test -f release_apks/MehmanshahrVpn-v2.1.1-ARM64-v8a.apk
+          test -f release_apks/MehmanshahrVpn-v2.1.1-ARMv7.apk
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
