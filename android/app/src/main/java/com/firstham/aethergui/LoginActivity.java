@@ -54,10 +54,12 @@ public final class LoginActivity extends AppCompatActivity {
         });
 
         if (!LicenseVerifier.isKeyConfigured()) {
-            // A build shipped with the placeholder key. Say so plainly rather than
-            // rejecting every license the user pastes.
-            showStatus(getString(R.string.login_key_missing), true);
+            // A build shipped with the placeholder key. No license it is shown
+            // can ever verify, so the button stays disabled — but the reason is
+            // stated at the top of the screen, not in small text under it.
+            binding.buildErrorBox.setVisibility(View.VISIBLE);
             binding.loginButton.setEnabled(false);
+            showStatus(getString(R.string.login_key_missing), true);
         }
 
         binding.loginButton.setOnClickListener(v -> submit());

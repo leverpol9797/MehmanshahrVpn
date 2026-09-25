@@ -12,6 +12,7 @@
     <string name="login_not_yet_valid">اعتبار این لایسنس هنوز آغاز نشده. ساعت و تاریخ گوشی را بررسی کنید.</string>
     <string name="login_malformed">متن لایسنس ناقص است. همان متنی را که ربات فرستاده، کامل کپی کنید.</string>
     <string name="login_clipboard_empty">کلیپ‌بورد خالی است</string>
+    <string name="login_key_missing_title">این نسخه معتبر نیست</string>
     <string name="login_key_missing">این نسخه با کلید عمومی تنظیم نشده ساخته شده است. نسخهٔ معتبر را از ریپو دریافت کنید.</string>
     <string name="license_missing">برای اتصال، ابتدا باید وارد شوید.</string>
 
