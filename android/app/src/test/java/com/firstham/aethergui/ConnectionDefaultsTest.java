@@ -7,9 +7,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public final class ConnectionDefaultsTest {
-    @Test public void freshInstallUsesBalancedGoolAutomaticMtuAndHttp2() {
-        assertEquals(2, ConnectionDefaults.PROTOCOL_INDEX);
-        assertEquals("gool", ConnectionDefaults.PROTOCOL);
+    @Test public void freshInstallUsesBalancedWireGuardAutomaticMtuAndHttp2() {
+        // Index 1 is WireGuard. Gool is the upstream research client's own transport, and a
+        // paid app shipping it as the default is a front for the free one. gool stays in the
+        // selector and remains fully selectable.
+        assertEquals(1, ConnectionDefaults.PROTOCOL_INDEX);
+        assertEquals("wireguard", ConnectionDefaults.PROTOCOL);
         // Balanced is the fresh-install scan mode. Index 0 must stay aligned with R.array.scan_labels,
         // whose first entry is Balanced, and with VpnConnectionController.SCANS. Turbo is untouched:
         // it remains in both arrays and is still selectable, it is simply no longer the default.
