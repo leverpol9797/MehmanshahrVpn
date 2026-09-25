@@ -159,9 +159,9 @@ public final class MainActivity extends AppCompatActivity {
         renderUpdateState();
         renderState(initialState(), getString(R.string.status_ready_message));
         autoConnectPending = savedInstanceState == null && preferences.getBoolean("autoConnectAtStart", false);
-        if (getIntent().getBooleanExtra(AethonTileService.EXTRA_CONNECT_FROM_TILE, false)) {
+        if (getIntent().getBooleanExtra(MehmanshahrTileService.EXTRA_CONNECT_FROM_TILE, false)) {
             autoConnectPending = false;
-            getIntent().removeExtra(AethonTileService.EXTRA_CONNECT_FROM_TILE);
+            getIntent().removeExtra(MehmanshahrTileService.EXTRA_CONNECT_FROM_TILE);
             binding.root.post(this::connect);
         }
     }
@@ -276,7 +276,7 @@ public final class MainActivity extends AppCompatActivity {
         binding.lanSwitch.setOnCheckedChangeListener((button, checked) -> { preferences.edit().putBoolean("lanEnabled", checked).apply(); saveSettings(); if ("connected".equals(state)) startService(new Intent(this, AetherVpnService.class).setAction(AetherVpnService.ACTION_SET_LAN).putExtra("enabled", checked).putExtra("port", 18190)); updateLanLabel(); });
         binding.copyLanAddressButton.setOnClickListener(v -> copyLanValue(false));
         binding.copyLanPortButton.setOnClickListener(v -> copyLanValue(true));
-        binding.exportSettingsButton.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").putExtra(Intent.EXTRA_TITLE, "aethon-settings-backup.json"), EXPORT_REQUEST));
+        binding.exportSettingsButton.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").putExtra(Intent.EXTRA_TITLE, "mehmanshahrvpn-settings-backup.json"), EXPORT_REQUEST));
         binding.importSettingsButton.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE), IMPORT_REQUEST));
         binding.notificationSettingsButton.setOnClickListener(v -> openNotificationSettings());
         binding.addTileButton.setOnClickListener(v -> requestQuickSettingsTile());
@@ -369,7 +369,7 @@ public final class MainActivity extends AppCompatActivity {
     private void handleBackup(int requestCode, Uri uri) {
         try {
             if (requestCode == EXPORT_REQUEST) {
-                JSONObject out = new JSONObject(); out.put("format", "Aethon Backup v1").put("schema", 1).put("backupVersion", 1);
+                JSONObject out = new JSONObject(); out.put("format", "MehmanshahrVpn Backup v1").put("schema", 1).put("backupVersion", 1);
         for (String key : new String[]{"mode","protocol","scan","transport","ip","obfuscation","theme","language","routing","splitIncludeApps","splitExcludeApps","splitApps","splitEnabled","dnsLeak","killSwitch","quickReconnect","autoConnectAtStart","mtuMode","mtu","lanEnabled","lanPort"}) { Object value = preferences.getAll().get(key); if (value != null) out.put(key, value); }
                 out.put("splitEnabled", preferences.getInt("routing", 0) >= 2);
                 out.put("automaticUpdates", getSharedPreferences(UpdateConfig.PREFS, MODE_PRIVATE).getBoolean(UpdateConfig.KEY_AUTO_DOWNLOAD, false));
@@ -566,7 +566,7 @@ public final class MainActivity extends AppCompatActivity {
     private void requestQuickSettingsTile() {
         if (Build.VERSION.SDK_INT >= 33) {
             StatusBarManager manager = getSystemService(StatusBarManager.class);
-            manager.requestAddTileService(new ComponentName(this, AethonTileService.class), getString(R.string.tile_name), Icon.createWithResource(this, R.drawable.ic_aethon_mono), getMainExecutor(), result -> Toast.makeText(this, R.string.tile_add_requested, Toast.LENGTH_SHORT).show());
+            manager.requestAddTileService(new ComponentName(this, MehmanshahrTileService.class), getString(R.string.tile_name), Icon.createWithResource(this, R.drawable.ic_app_mono), getMainExecutor(), result -> Toast.makeText(this, R.string.tile_add_requested, Toast.LENGTH_SHORT).show());
             return;
         }
         try { startActivity(new Intent("android.settings.QUICK_SETTINGS_SETTINGS")); }

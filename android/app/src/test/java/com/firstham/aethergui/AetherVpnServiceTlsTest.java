@@ -56,7 +56,7 @@ import static org.junit.Assert.fail;
  * handshake then succeeds, which is what the service used to do.
  */
 public final class AetherVpnServiceTlsTest {
-    private static final String PASSWORD = "aethon-unit-test";
+    private static final String PASSWORD = "mshvpn-unit-test";
     private static final char[] PASSWORD_CHARS = PASSWORD.toCharArray();
     private static final int TIMEOUT_MS = 15_000;
 
@@ -64,9 +64,9 @@ public final class AetherVpnServiceTlsTest {
     private static SSLSocketFactory clientFactory;
 
     @BeforeClass public static void mintCertificates() throws Exception {
-        workDir = Files.createTempDirectory("aethon-tls-test");
+        workDir = Files.createTempDirectory("mshvpn-tls-test");
         keytool("-genkeypair", "-alias", "ca", "-keyalg", "RSA", "-keysize", "2048",
-                "-dname", "CN=Aethon Unit Test CA", "-ext", "bc:c", "-validity", "36500",
+                "-dname", "CN=Mehmanshahr Unit Test CA", "-ext", "bc:c", "-validity", "36500",
                 "-keystore", "ca.p12", "-storetype", "PKCS12", "-storepass", PASSWORD);
         keytool("-exportcert", "-alias", "ca", "-keystore", "ca.p12", "-storepass", PASSWORD,
                 "-rfc", "-file", "ca.crt");

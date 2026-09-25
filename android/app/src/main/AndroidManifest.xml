@@ -51,12 +51,12 @@
         </receiver>
         <service android:name=".AetherVpnService" android:permission="android.permission.BIND_VPN_SERVICE" android:exported="false" android:foregroundServiceType="specialUse" android:stopWithTask="false">
             <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Aethon VPN tunnel" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="MehmanshahrVPN tunnel" />
         </service>
         <service
-            android:name=".AethonTileService"
+            android:name=".MehmanshahrTileService"
             android:exported="true"
-            android:icon="@drawable/ic_aethon_mono"
+            android:icon="@drawable/ic_app_mono"
             android:label="@string/tile_name"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
@@ -64,9 +64,9 @@
             </intent-filter>
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
         </service>
-        <receiver android:name=".AethonWidgetProvider" android:exported="true">
+        <receiver android:name=".MehmanshahrWidgetProvider" android:exported="true">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/aethon_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/app_widget_info" />
         </receiver>
     </application>
 </manifest>

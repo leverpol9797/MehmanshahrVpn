@@ -6,7 +6,14 @@ dependencies {
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.work:work-runtime:2.10.0'
     implementation 'com.google.android.material:material:1.12.0'
+    // Ed25519 verification for the signed license. Deliberately not BouncyCastle:
+    // this library is small, has no provider-registration traps, and does the one
+    // algorithm we need correctly. The app only ever verifies — it never signs.
+    implementation 'net.i2p.crypto:eddsa:0.3.0'
+
     testImplementation 'junit:junit:4.13.2'
+    // org.json is stubbed inside android.jar, so JVM unit tests need the real one
+    testImplementation 'org.json:json:20231013'
 }
 
 def signingProperties = new Properties()

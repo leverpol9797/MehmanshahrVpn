@@ -1,53 +1,158 @@
 package com.firstham.aethergui;
 
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.View;
-import android.widget.Toast;
+import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.material.textfield.TextInputEditText;
+
 import com.firstham.aethergui.databinding.ActivityLoginBinding;
 
+/**
+ * The launcher. Holds the gate shut until a license signed by the issuing
+ * service is presented.
+ *
+ * This screen is a convenience, not the enforcement point. The quick-settings
+ * tile and the home-screen widget start the tunnel service without ever opening
+ * an activity, so {@link AetherVpnService} checks {@link AuthGate} for itself.
+ * A check here alone would leave the tunnel startable.
+ */
 public final class LoginActivity extends AppCompatActivity {
-    private static final String PASSWORD = "09372550259";
-    private static final String PREFS = "aether";
-    private static final String UNLOCKED = "login_unlocked";
+
+    private ActivityLoginBinding binding;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(UNLOCKED, false)) {
+
+        // A valid license means there is nothing to ask.
+        if (AuthGate.isValid(this)) {
             openMain();
             return;
         }
 
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        ActivityLoginBinding binding = ActivityLoginBinding.inflate(getLayoutInflater());
+        binding = ActivityLoginBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (view, insets) -> {
             androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             view.setPadding(0, bars.top, 0, bars.bottom);
             return insets;
         });
 
-        binding.passwordInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        binding.loginButton.setOnClickListener(v -> {
-            String entered = binding.passwordInput.getText() == null
-                    ? "" : binding.passwordInput.getText().toString().trim();
-            if (PASSWORD.equals(entered)) {
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(UNLOCKED, true).apply();
-                openMain();
-            } else {
-                binding.passwordLayout.setError(getString(R.string.login_wrong_password));
-                binding.passwordInput.requestFocus();
-                Toast.makeText(this, R.string.login_wrong_password, Toast.LENGTH_SHORT).show();
+        if (!LicenseVerifier.isKeyConfigured()) {
+            // A build shipped with the placeholder key. No license it is shown
+            // can ever verify, so the button stays disabled — but the reason is
+            // stated at the top of the screen, not in small text under it.
+            binding.buildErrorBox.setVisibility(View.VISIBLE);
+            binding.loginButton.setEnabled(false);
+            showStatus(getString(R.string.login_key_missing), true);
+        }
+
+        binding.loginButton.setOnClickListener(v -> submit());
+        binding.pasteButton.setOnClickListener(v -> pasteInto());
+        binding.botCopyButton.setOnClickListener(v -> copyBotId());
+        binding.botOpenButton.setOnClickListener(v -> openRubika());
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() {
+                finishAffinity();
             }
         });
+    }
+
+    /**
+     * Copies the bot id so it can be pasted into Rubika's search box.
+     *
+     * Rubika addresses bots as name@ (the @ trails), so the string copied here
+     * matches what the user sees in the app.
+     */
+    private void copyBotId() {
+        ClipboardManager clipboard =
+                (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(
+                    ClipData.newPlainText("bot", getString(R.string.license_bot_id)));
+            showStatus(getString(R.string.license_bot_copied), false);
+        }
+    }
+
+    private void openRubika() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                    Uri.parse(getString(R.string.license_bot_link))));
+        } catch (ActivityNotFoundException e) {
+            showStatus(getString(R.string.login_bot_no_app), true);
+        }
+    }
+
+    private void pasteInto() {
+        ClipboardManager clipboard =
+                (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null || !clipboard.hasPrimaryClip()
+                || clipboard.getPrimaryClip() == null
+                || clipboard.getPrimaryClip().getItemCount() == 0) {
+            showStatus(getString(R.string.login_clipboard_empty), true);
+            return;
+        }
+        CharSequence text = clipboard.getPrimaryClip().getItemAt(0).coerceToText(this);
+        if (text != null) binding.passwordInput.setText(text);
+    }
+
+    private void submit() {
+        TextInputEditText field = binding.passwordInput;
+        String typed = field.getText() == null ? "" : field.getText().toString().trim();
+        if (typed.isEmpty()) {
+            binding.passwordLayout.setError(getString(R.string.login_empty));
+            return;
+        }
+        binding.passwordLayout.setError(null);
+
+        LicenseVerifier.Result result = AuthGate.submit(this, typed);
+
+        if (result.isValid()) {
+            openMain();
+            return;
+        }
+
+        binding.passwordLayout.setError(messageFor(result));
+        showStatus(messageFor(result), true);
+    }
+
+    private String messageFor(LicenseVerifier.Result result) {
+        switch (result.status) {
+            case EXPIRED:
+                return getString(R.string.login_expired);
+            case NOT_YET_VALID:
+                // Almost always a wrong device clock.
+                return getString(R.string.login_not_yet_valid);
+            case MALFORMED:
+                return getString(R.string.login_malformed);
+            case BAD_SIGNATURE:
+            default:
+                return getString(R.string.login_wrong_password);
+        }
+    }
+
+    private void showStatus(String text, boolean isError) {
+        TextView status = binding.loginStatus;
+        status.setText(text);
+        status.setVisibility(View.VISIBLE);
+        status.setTextColor(ContextCompat.getColor(this,
+                isError ? R.color.red : R.color.muted));
     }
 
     private void openMain() {
@@ -55,7 +160,10 @@ public final class LoginActivity extends AppCompatActivity {
         finish();
     }
 
-    @Override public void onBackPressed() {
-        finishAffinity();
+    @Override protected void onResume() {
+        super.onResume();
+        // Returning from the main screen after a lapse, or after a licence was
+        // cleared, should land back here rather than on a dead Connect button.
+        if (binding != null && AuthGate.isValid(this)) openMain();
     }
 }

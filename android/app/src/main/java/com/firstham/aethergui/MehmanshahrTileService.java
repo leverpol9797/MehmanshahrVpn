@@ -17,7 +17,7 @@ import android.annotation.SuppressLint;
 
 import androidx.core.content.ContextCompat;
 
-public final class AethonTileService extends TileService {
+public final class MehmanshahrTileService extends TileService {
     public static final String EXTRA_CONNECT_FROM_TILE = "connect_from_tile";
 
     /**
@@ -31,7 +31,7 @@ public final class AethonTileService extends TileService {
      * whatever it last rendered for as long as the user held the shade open.
      *
      * <p>That was reproduced on the device: with the shade open and the tile reading
-     * "Aethon VPN, Connected", a tap tore the tunnel down - the log recorded
+     * "MehmanshahrVPN, Connected", a tap tore the tunnel down - the log recorded
      * {@code disconnect command_received=6ms} and {@code teardown=158ms}, and tun0 was gone - yet the
      * tile still read "Connected" on every subsequent dump. The shade shows VPN state exactly while
      * the user is watching it change, so this is the one window where staleness matters most.
@@ -176,6 +176,6 @@ public final class AethonTileService extends TileService {
     }
 
     static void requestUpdate(Context context) {
-        requestListeningState(context, new ComponentName(context, AethonTileService.class));
+        requestListeningState(context, new ComponentName(context, MehmanshahrTileService.class));
     }
 }

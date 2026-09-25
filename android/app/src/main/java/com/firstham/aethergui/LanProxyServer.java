@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 final class LanProxyServer {
-    private static final String TAG = "AethonLanProxy";
+    private static final String TAG = "MehmanshahrLanProxy";
     /** Upper bound on simultaneously relayed LAN clients; each one costs two threads. */
     private static final int MAX_CLIENTS = 24;
     /** Idle relay timeout. Long enough for keep-alive sessions, short enough to reap dead peers. */
@@ -66,7 +66,7 @@ final class LanProxyServer {
             ServerSocket socket = new ServerSocket(requestedPort, 16, local);
             upstreamHost = host; upstreamPort = targetPort;
             // Fresh credentials per session so a leaked pair cannot be replayed against a later one.
-            username = "aethon-" + randomHex(4);
+            username = "mshvpn-" + randomHex(4);
             password = randomHex(16);
             server = socket; address = local.getHostAddress(); port = socket.getLocalPort();
             workers.execute(() -> acceptLoop(socket));

@@ -182,8 +182,33 @@
                 android:fillViewport="true"
                 android:visibility="gone">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_horizontal" android:orientation="vertical" android:padding="22dp" android:paddingBottom="40dp">
-                    <ImageView android:layout_width="68dp" android:layout_height="68dp" android:layout_marginTop="18dp" android:src="@drawable/ic_aethon_mono" app:tint="@color/blue_600" />
+                    <ImageView android:layout_width="68dp" android:layout_height="68dp" android:layout_marginTop="18dp" android:src="@drawable/ic_app_mono" app:tint="@color/blue_600" />
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:gravity="center" android:text="@string/about_creator" android:textColor="@color/text" android:textSize="18sp" android:textStyle="bold" />
+
+                    <!--
+                      AGPL-3.0 §5(a) requires the interface to carry these
+                      notices, and the "appropriate legal notices" clause
+                      requires them to reach the person using the program —
+                      not merely sit in the resource file. This block is
+                      load-bearing for the licence, which is why it stays
+                      even though it takes up vertical space.
+                    -->
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/app_name" android:textColor="@color/muted" android:textSize="14sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:gravity="center" android:text="@string/app_version" android:textColor="@color/muted" android:textSize="12sp" />
+
+                    <View android:layout_width="56dp" android:layout_height="1dp" android:layout_marginTop="20dp" android:background="@color/border" />
+
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:gravity="center" android:text="@string/about_license_title" android:textColor="@color/text" android:textSize="14sp" android:textStyle="bold" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center" android:text="@string/about_license_name" android:textColor="@color/blue_600" android:textDirection="ltr" android:textSize="13sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/about_license_body" android:textColor="@color/muted" android:textSize="12sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/about_modified" android:textColor="@color/muted" android:textSize="12sp" />
+
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center" android:text="@string/about_source_title" android:textColor="@color/text" android:textSize="14sp" android:textStyle="bold" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/about_aethon_credit" android:textColor="@color/muted" android:textSize="12sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center" android:text="@string/about_aethon_repository" android:textColor="@color/blue_600" android:textDirection="ltr" android:textSize="12sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:text="@string/aether_credit" android:textColor="@color/muted" android:textSize="12sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center" android:text="@string/aether_repository" android:textColor="@color/blue_600" android:textDirection="ltr" android:textSize="12sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:text="@string/aether_core_version" android:textColor="@color/muted" android:textDirection="ltr" android:textSize="12sp" />
                 </LinearLayout>
             </androidx.core.widget.NestedScrollView>
 
