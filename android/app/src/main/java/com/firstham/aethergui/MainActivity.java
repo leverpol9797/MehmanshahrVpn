@@ -113,7 +113,7 @@ public final class MainActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle savedInstanceState) {
         preferences = getSharedPreferences("aether", MODE_PRIVATE);
         migrateLegacySmartSelection();
-        String language = normalizedLanguage(preferences.getString("language", "en"));
+        String language = normalizedLanguage(preferences.getString("language", "fa"));
         preferences.edit().putString("language", language).apply();
         applyLanguage(language, false);
         AppCompatDelegate.setDefaultNightMode(themeMode(preferences.getInt("theme", 0)));
@@ -180,7 +180,10 @@ public final class MainActivity extends AppCompatActivity {
         binding.ipInput.setOnItemClickListener((p, v, position, id) -> { binding.ipInput.setTag(position); saveSettings(); });
         binding.obfuscationInput.setOnItemClickListener((p, v, position, id) -> { binding.obfuscationInput.setTag(position); saveSettings(); });
         binding.themeInput.setOnItemClickListener((p, v, position, id) -> { binding.themeInput.setTag(position); saveSettings(); applyTheme(position); });
-        binding.languageInput.setOnItemClickListener((p, v, position, id) -> { preferences.edit().putString("language", position == 1 ? "fa" : "en").apply(); applyLanguage(position == 1 ? "fa" : "en", true); });
+        binding.languageInput.setOnItemClickListener((p, v, position, id) -> { // Persian is index 0 in language_labels; the array leads with the app's own
+        // language so a fresh install has nothing to choose.
+        String code = position == 0 ? "fa" : "en";
+        preferences.edit().putString("language", code).apply(); applyLanguage(code, true); });
     }
 
     private void setAdapter(MaterialAutoCompleteTextView view, int arrayId) {
@@ -293,7 +296,7 @@ public final class MainActivity extends AppCompatActivity {
         setSelection(binding.ipInput, "ip", 0, R.array.ip_labels);
         setSelection(binding.obfuscationInput, "obfuscation", ConnectionDefaults.OBFUSCATION_INDEX, R.array.obfuscation_labels);
         setSelection(binding.themeInput, "theme", 0, R.array.theme_labels);
-        setSelection(binding.languageInput, "fa".equals(preferences.getString("language", "en")) ? 1 : 0, R.array.language_labels);
+        setSelection(binding.languageInput, "fa".equals(preferences.getString("language", "fa")) ? 0 : 1, R.array.language_labels);
         binding.socksInput.setText(preferences.getString("socks", getString(R.string.default_socks_address)));
         binding.peerInput.setText(preferences.getString("peer", "")); binding.mtuInput.setText(preferences.getString("mtu", getString(R.string.default_mtu)));
         boolean automaticMtu = "automatic".equals(VpnConnectionController.normalizedMtuMode(preferences.getString("mtuMode", ConnectionDefaults.MTU_MODE)));
@@ -394,7 +397,7 @@ public final class MainActivity extends AppCompatActivity {
                     AppUpdateManager.setAutomaticChecks(this, automatic);
                     binding.autoDownloadSwitch.setChecked(automatic);
                 }
-                restoreSettings(); applyTheme(preferences.getInt("theme", 0)); applyLanguage(preferences.getString("language", "en"), true); Toast.makeText(this, R.string.backup_restored, Toast.LENGTH_SHORT).show();
+                restoreSettings(); applyTheme(preferences.getInt("theme", 0)); applyLanguage(preferences.getString("language", "fa"), true); Toast.makeText(this, R.string.backup_restored, Toast.LENGTH_SHORT).show();
             }
         } catch (Exception error) { Toast.makeText(this, R.string.backup_failed, Toast.LENGTH_LONG).show(); }
     }
@@ -534,7 +537,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private Set<String> selectedPackages() { Set<String> result = new LinkedHashSet<>(); String key = binding.routingGroup.getCheckedRadioButtonId() == R.id.exclude_apps_radio ? "splitExcludeApps" : "splitIncludeApps"; AppSelectionActivity.parsePackages(preferences.getString(key, ""), result); return result; }
     private void updateSelectedCount() { if (binding == null) return; binding.selectedAppsCount.setText(getResources().getQuantityString(R.plurals.app_picker_selected_count, selectedPackages().size(), selectedPackages().size())); }
-    private void resetDefaults() { String language = preferences.getString("language", "en"); preferences.edit().clear().putString("language", language).putInt("theme", 0).apply(); restoreSettings(); saveSettings(); applyTheme(0); }
+    private void resetDefaults() { String language = preferences.getString("language", "fa"); preferences.edit().clear().putString("language", language).putInt("theme", 0).apply(); restoreSettings(); saveSettings(); applyTheme(0); }
 
     private void checkForUpdates() { SharedPreferences updates = getSharedPreferences(UpdateConfig.PREFS, MODE_PRIVATE); updates.edit().putString("status", "checking").apply(); renderUpdateState(); binding.checkUpdatesButton.setEnabled(false); AppUpdateManager.checkNow(this, new AppUpdateManager.Listener() { @Override public void onComplete() { binding.checkUpdatesButton.setEnabled(true); renderUpdateState(); } @Override public void onError(Throwable error) { binding.checkUpdatesButton.setEnabled(true); renderUpdateState(); String detail = error == null ? "" : error.getMessage(); Toast.makeText(MainActivity.this, detail == null || detail.isEmpty() ? getString(R.string.update_failed) : getString(R.string.update_failed) + ": " + detail, Toast.LENGTH_LONG).show(); } }, true); }
     private void renderUpdateState() { if (binding == null) return; SharedPreferences updates = getSharedPreferences(UpdateConfig.PREFS, MODE_PRIVATE); String latest = updates.getString(UpdateConfig.KEY_LATEST_VERSION, ""); String status = updates.getString("status", ""); binding.latestVersionValue.setText(latest.isEmpty() ? getString(R.string.not_checked) : latest); int id = "up_to_date".equals(status) ? R.string.update_up_to_date : "available".equals(status) ? R.string.update_available : "downloading".equals(status) ? R.string.update_downloading : "ready_install".equals(status) ? R.string.update_ready_install : "checking".equals(status) ? R.string.update_checking : "download_failed".equals(status) ? R.string.update_download_failed : "verification_failed".equals(status) ? R.string.update_verification_failed : "failed".equals(status) ? R.string.update_failed : R.string.not_checked; binding.updateStatusValue.setText(id); String notes = updates.getString(UpdateConfig.KEY_RELEASE_NOTES, ""); binding.releaseNotesValue.setText(notes); binding.releaseNotesValue.setVisibility(notes.isEmpty() ? View.GONE : View.VISIBLE); boolean downloading = "downloading".equals(status); int progress = downloading ? AppUpdateManager.downloadProgress(this) : -1; binding.updateProgress.setVisibility(downloading ? View.VISIBLE : View.GONE); binding.updateProgress.setIndeterminate(downloading && progress <= 0); if (progress > 0) binding.updateProgress.setProgress(progress); boolean action = "available".equals(status) || "download_failed".equals(status) || "verification_failed".equals(status) || "ready_install".equals(status); binding.downloadUpdateButton.setVisibility(action ? View.VISIBLE : View.GONE); binding.downloadUpdateButton.setText("ready_install".equals(status) ? R.string.install_update : R.string.download_update); }

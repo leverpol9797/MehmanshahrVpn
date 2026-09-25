@@ -204,10 +204,16 @@
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/about_modified" android:textColor="@color/muted" android:textSize="12sp" />
 
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center" android:text="@string/about_source_title" android:textColor="@color/text" android:textSize="14sp" android:textStyle="bold" />
+
+                    <!--
+                      Attribution stays: AGPL-3.0 §5(a) requires the interface to
+                      carry appropriate legal notices. The repository URLs are
+                      gone — a paid app that points at the free upstream is
+                      telling every customer where to stop paying, and the
+                      names alone satisfy the notice.
+                    -->
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/about_aethon_credit" android:textColor="@color/muted" android:textSize="12sp" />
-                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center" android:text="@string/about_aethon_repository" android:textColor="@color/blue_600" android:textDirection="ltr" android:textSize="12sp" />
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:text="@string/aether_credit" android:textColor="@color/muted" android:textSize="12sp" />
-                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center" android:text="@string/aether_repository" android:textColor="@color/blue_600" android:textDirection="ltr" android:textSize="12sp" />
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:text="@string/aether_core_version" android:textColor="@color/muted" android:textDirection="ltr" android:textSize="12sp" />
                 </LinearLayout>
             </androidx.core.widget.NestedScrollView>

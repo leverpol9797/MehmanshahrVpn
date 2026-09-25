@@ -1,14 +1,19 @@
 package com.firstham.aethergui;
 
 final class ConnectionDefaults {
-    static final int PROTOCOL_INDEX = 2;
+    /**
+     * Index 1 of {@code R.array.protocol_labels} is WireGuard. Gool was the
+     * fresh-install default, but it is a research client's own transport and a
+     * paid app that ships it as the default is just a front for the free one.
+     */
+    static final int PROTOCOL_INDEX = 1;
     /**
      * Fresh-install default; an existing preference value always wins at the call site. Index 0 of
      * {@code R.array.scan_labels} is Balanced, matching {@code VpnConnectionController.SCANS}.
      * Turbo is unchanged and still selectable - only which mode a new install starts on moved.
      */
     static final int SCAN_INDEX = 0;
-    static final String PROTOCOL = "gool";
+    static final String PROTOCOL = "wireguard";
     static final String SCAN = "balanced";
     static final int OBFUSCATION_INDEX = 2;
     static final String OBFUSCATION = "balanced";

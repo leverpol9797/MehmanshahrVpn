@@ -5,5 +5,5 @@
     <string-array name="ip_labels"><item>IPv4 (recommended)</item><item>IPv6</item><item>IPv4 + IPv6</item></string-array>
     <string-array name="obfuscation_labels"><item>Firewall (recommended)</item><item>GFW</item><item>Balanced</item><item>Aggressive</item><item>Off</item></string-array>
     <string-array name="theme_labels"><item>System default</item><item>Light</item><item>Dark</item></string-array>
-    <string-array name="language_labels"><item>فارسی</item><item>English</item></string-array>
+    <string-array name="language_labels"><item>English</item><item>فارسی</item></string-array>
 </resources>

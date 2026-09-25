@@ -1,0 +1,271 @@
+<resources>
+    <string name="app_name">MehmanshahrVpn</string>
+
+    <!-- ── ورود با لایسنس امضاشده ─────────────────────────────────────── -->
+    <string name="login_title">Paste your license to continue</string>
+    <string name="login_password_hint">License</string>
+    <string name="device_title">Your device code</string>
+    <string name="device_step">So the licence works only on this phone, send this code with your number to the bot.</string>
+    <string name="device_copy">Copy device code</string>
+    <string name="device_copied">Device code copied</string>
+    <string name="login_wrong_device">This licence was issued for a different phone. Send this phone's device code to the bot.</string>
+    <string name="login_button">Activate</string>
+    <string name="login_paste">Copy from clipboard</string>
+    <string name="login_wrong_password">This licence is not valid</string>
+    <string name="login_empty">Paste a licence or copy one from the clipboard first</string>
+    <string name="login_expired">Your licence has expired. Send your number to the bot to renew.</string>
+    <string name="login_not_yet_valid">This licence has not started yet. Check the phone's date and time.</string>
+    <string name="login_malformed">The licence text is incomplete. Copy the whole message the bot sent.</string>
+    <string name="login_clipboard_empty">The clipboard is empty</string>
+    <string name="login_key_missing_title">This build is not valid</string>
+    <string name="login_key_missing">This build shipped without the issuer key. Install the latest release.</string>
+    <string name="license_missing">Sign in before connecting.</string>
+
+    <!-- ── ربات روبیکا ────────────────────────────────────────────────────── -->
+    <string name="license_bot_id" translatable="false">MehmanshahrVpnBot@</string>
+    <!-- قرارداد نام‌گذاری روبیکا «نام@» است: علامت @ در انتها می‌آید.
+         لینک مستقیم هم یک URL ساده است و اسکیمای اختصاصی ندارد:
+         https://rubika.ir/BotFather · https://rubika.ir/chattino -->
+    <string name="license_bot_link" translatable="false">https://rubika.ir/MehmanshahrVpnBot</string>
+    <string name="license_bot_title">Get a licence from the Rubika bot</string>
+    <string name="license_bot_step">Send your number to this bot in Rubika. Once approved, your licence arrives here.</string>
+    <string name="license_bot_open">Open Rubika</string>
+    <string name="license_bot_copy">Copy id</string>
+    <string name="license_bot_copied">Bot id copied</string>
+    <string name="login_bot_no_app">Rubika is not installed. Copy the bot id and search for it in the app.</string>
+
+    <string name="about_creator">Made by Hossein Akhlaghi</string>
+    <string name="app_version" translatable="false">v2.3.0</string>
+    <string name="version_format" translatable="false">v%1$s</string>
+    <string name="default_socks_address" translatable="false">127.0.0.1:1819</string>
+    <string name="default_mtu" translatable="false">1360</string>
+
+    <string name="nav_connect">Connect</string>
+    <string name="nav_configurations">Configurations</string>
+    <string name="nav_settings">Settings</string>
+    <string name="open_navigation">Open navigation</string>
+    <string name="close_navigation">Close navigation</string>
+    <string name="configurations_title">Configurations</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_summary">How should the MehmanshahrVPN app behave and look?</string>
+
+    <string name="connect">CONNECT</string>
+    <string name="disconnect">DISCONNECT</string>
+    <string name="connecting">CONNECTING…</string>
+    <string name="disconnecting">DISCONNECTING…</string>
+    <string name="status_disconnected">MehmanshahrVPN Ready</string>
+    <string name="status_connected">Protected</string>
+    <string name="status_connected_via_smart">Protected • %1$s</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_checking">Checking…</string>
+    <string name="tap_to_secure">Tap to secure</string>
+    <string name="status_ready_message"></string>
+    <string name="status_protected">You are protected</string>
+    <string name="status_starting">Starting MehmanshahrVPN</string>
+    <string name="status_scanning">Finding a gateway</string>
+    <string name="status_securing">Securing your route</string>
+    <string name="status_reconnecting">Reconnecting</string>
+    <string name="status_disconnecting">Disconnecting</string>
+    <string name="status_blocked">Traffic is blocked</string>
+    <string name="status_error">Connection needs attention</string>
+    <string name="connection_location_unavailable">Location unavailable</string>
+    <string name="upload_traffic">&#x2191; Upload Traffic\n%1$s</string>
+    <string name="download_traffic">&#x2193; Download Traffic\n%1$s</string>
+    <string name="ping_value">%1$s</string>
+    <string name="session_label">Traffic</string>
+    <string name="latency_label">Ping</string>
+    <string name="node_label">NODE</string>
+    <string name="upload_label">&#x2191; Upload</string>
+    <string name="download_label">&#x2193; Download</string>
+    <string name="ping_label">Ping</string>
+    <string name="ping_millis">%1$s ms</string>
+    <string name="location_detecting">Finding VPN location…</string>
+    <string name="metric_unavailable">--</string>
+    <string name="traffic_kilobytes">%1$.1f KB</string>
+    <string name="traffic_megabytes">%1$.1f MB</string>
+    <string name="traffic_gigabytes">%1$.1f GB</string>
+
+    <string name="connection_mode">Connection mode</string>
+    <string name="vpn_mode">Device VPN</string>
+    <string name="proxy_mode">SOCKS5 proxy</string>
+    <string name="smart_mode">Smart Connect</string>
+    <string name="smart_mode_summary">Test every protocol and choose the fastest reliable route.</string>
+    <string name="protocol">Protocol</string>
+    <string name="scan_mode">Scan mode</string>
+    <string name="transport">MASQUE transport</string>
+    <string name="advanced_settings">Advanced settings</string>
+    <string name="show_advanced">Show advanced</string>
+    <string name="hide_advanced">Hide advanced</string>
+    <string name="ip_scan">IP scan</string>
+    <string name="obfuscation">Obfuscation</string>
+    <string name="log_level" translatable="false"></string>
+    <string name="socks_address">Local SOCKS5 address</string>
+    <string name="custom_endpoint">Custom endpoint (optional)</string>
+    <string name="mtu">VPN MTU</string>
+    <string name="mtu_automatic">Automatic</string>
+    <string name="mtu_manual">Manual</string>
+    <string name="mtu_manual_value">Manual MTU (1280-1500)</string>
+    <string name="mtu_summary">Safe default: 1360</string>
+    <string name="mtu_automatic_summary">Probe the current network and use the largest stable MTU.</string>
+    <string name="mtu_manual_summary">Use the configured MTU for the tunnel and transport.</string>
+    <string name="invalid_mtu">Enter an MTU from 1280 to 1500.</string>
+    <string name="dns_protection">Private DNS routing</string>
+    <string name="dns_protection_summary">Route DNS requests through the tunnel</string>
+    <string name="kill_switch">Fail closed on tunnel errors</string>
+    <string name="kill_switch_summary">Keep VPN routes blocked if MehmanshahrVPN unexpectedly stops</string>
+    <string name="quick_reconnect">Auto Reconnect</string>
+    <string name="quick_reconnect_summary">Recover automatically after a temporary connection failure</string>
+    <string name="auto_connect_at_start">Auto connect at start</string>
+    <string name="auto_connect_at_start_summary">Connect with the saved configuration when MehmanshahrVPN opens</string>
+    <string name="reset_defaults">Reset defaults</string>
+
+    <string name="split_tunneling">Split Tunneling</string>
+    <string name="split_tunneling_summary">Choose which apps use the MehmanshahrVPN connection.</string>
+    <string name="routing_mode">Routing mode</string>
+    <string name="split_include">Include Apps</string>
+    <string name="split_include_summary">Only selected apps use MehmanshahrVPN</string>
+    <string name="split_exclude">Exclude Apps</string>
+    <string name="split_exclude_summary">Selected apps bypass MehmanshahrVPN</string>
+    <string name="selected_apps">Selected Apps</string>
+    <string name="choose_apps">Select Apps</string>
+    <string name="choose_apps_summary">Changes apply the next time you connect.</string>
+    <string name="split_include_empty">Choose at least one installed application for include-only routing.</string>
+    <string name="app_picker_title">Select Apps</string>
+    <string name="app_picker_search">Search apps</string>
+    <string name="app_picker_empty">No matching applications</string>
+    <string name="app_picker_missing">Missing application</string>
+    <string name="app_picker_done">Apply</string>
+    <string name="select_all">Select All</string>
+    <string name="clear_all">Clear All</string>
+    <plurals name="app_picker_selected_count"><item quantity="one">%1$d app selected</item><item quantity="other">%1$d apps selected</item></plurals>
+
+    <string name="theme">Theme</string>
+    <string name="language">Language</string>
+    <string name="notifications">Notifications</string>
+    <string name="notifications_summary">Manage VPN and update notifications</string>
+    <string name="manage_notifications">Manage Notifications</string>
+    <string name="quick_settings">Quick Settings</string>
+    <string name="quick_settings_summary">Add the MehmanshahrVPN tile for fast connect and disconnect</string>
+    <string name="add_quick_settings_tile">Add MehmanshahrVPN Tile</string>
+    <string name="tile_add_requested">Quick Settings tile request opened.</string>
+    <string name="tile_add_manual">Open Quick Settings edit mode and add MehmanshahrVPN.</string>
+    <!-- ── About / attribution ──────────────────────────────────────────────
+         AGPL-3.0 requires the interface to carry these notices. Keep them. -->
+    <string name="about_version">نسخه %1$s</string>
+    <string name="about_license_title">مجوز نرم‌افزار آزاد</string>
+    <string name="about_license_body">این برنامه تحت مجوز GNU Affero General Public License نسخهٔ ۳ منتشر شده است. اگر آن را از طریق شبکه به کاربران ارائه می‌دهید، موظفید کد منبع کامل نسخهٔ خود را نیز به همان شکل ارائه دهید.</string>
+    <string name="about_license_name" translatable="false">AGPL-3.0-only</string>
+    <string name="about_modified">این نسخه تغییراتی نسبت به نسخهٔ اصلی دارد و تحت همان مجوز منتشر می‌شود.</string>
+    <string name="about_source_title">کد منبع</string>
+
+    <string name="about">About</string>
+    <string name="about_summary">MehmanshahrVPN برای اندروید</string>
+    <string name="original_project">Original Project: Aether</string>
+    <string name="aether_credit">Based on the original Aether project by CluvexStudio.</string>
+    <string name="aether_core_version">Aether Core v1.9.0</string>
+    <string name="application_project">برنامه: MehmanshahrVPN</string>
+    <string name="about_aethon_credit">برنامه و رابط اندروید: Aethon، اثر hamvex — AGPL-3.0</string>
+
+    <string name="tile_name">MehmanshahrVPN</string>
+    <string name="tile_connected">Connected</string>
+    <string name="tile_connecting">Connecting</string>
+    <string name="tile_blocked">Blocked - tap to disconnect</string>
+    <string name="tile_error">Needs attention - tap to retry</string>
+    <string name="tile_disconnected">Disconnected</string>
+    <string name="tile_unavailable">Unavailable</string>
+    <string name="notification_channel">MehmanshahrVPN</string>
+    <string name="notification_channel_summary">MehmanshahrVPN connection status</string>
+    <string name="notification_alert_channel">MehmanshahrVPN alerts</string>
+    <string name="notification_alert_channel_summary">Warnings when the MehmanshahrVPN tunnel stops protecting traffic</string>
+    <string name="service_protection_lost_title">MehmanshahrVPN is no longer protecting this device</string>
+    <string name="service_protection_lost">Traffic is unprotected: %1$s</string>
+    <string name="service_preparing">Preparing a secure connection</string>
+    <string name="service_launching">Launching the VPN core</string>
+    <string name="service_disconnecting">Closing the tunnel safely</string>
+    <string name="service_disconnected">Disconnected safely</string>
+    <string name="service_smart_testing">Testing MASQUE, WireGuard, and WARP-in-WARP</string>
+    <string name="service_scanning">Scanning for a verified gateway</string>
+    <string name="service_proxy_ready">Local SOCKS5 proxy is ready</string>
+    <string name="service_proxy_connected">SOCKS5 proxy is connected</string>
+    <string name="service_protected">Your device traffic is protected</string>
+    <string name="service_traffic_checking">Verifying internet traffic</string>
+    <string name="service_smart_protected">Protected with Smart Connect</string>
+    <string name="service_vpn_protected">محافظت از طریق اتصال VPN</string>
+    <string name="service_blocked">Tunnel stopped; network remains blocked by fail-closed mode</string>
+    <string name="service_blocked_notification">Traffic blocked - reconnect or disconnect</string>
+    <string name="service_identity_ready">Identity ready; finding the best gateway</string>
+    <string name="service_testing_gateways">Testing reachable gateways</string>
+    <string name="service_gateway_verified">Gateway verified; securing the tunnel</string>
+    <string name="service_reconnecting">Connection lost; recovering the last verified route</string>
+    <string name="service_restored">Connection restored</string>
+    <string name="service_testing_protocol">Testing %1$s (%2$d/%3$d)</string>
+    <string name="service_reconnect_failed">MehmanshahrVPN could not recover after %1$d attempts</string>
+    <string name="service_gool_checking_exit">Checking gool exit country</string>
+    <string name="service_gool_rejecting_iran">Iran exit rejected; selecting another route (%1$d/%2$d)</string>
+    <string name="service_gool_iran_failed">Every available gool route exited through Iran after %1$d retries.</string>
+    <string name="service_gool_country_unavailable">MehmanshahrVPN could not verify the gool exit country.</string>
+    <string name="service_network_lost">Network unavailable; waiting to reconnect</string>
+    <string name="service_network_restored">Network changed; restoring the secure route</string>
+    <string name="service_tunnel_unresponsive">Tunnel health check failed; reconnecting</string>
+    <string name="service_connect_timeout">Connection did not complete in time; MehmanshahrVPN cleaned up instead of waiting</string>
+    <string name="service_connect_retry">First attempt failed; cleaning up and retrying once</string>
+    <string name="service_stale_core_cleared">Cleared a leftover MehmanshahrVPN core process before connecting</string>
+
+    <string name="invalid_socks">Enter a valid host:port SOCKS5 address.</string>
+    <string name="vpn_permission_denied">VPN permission is required for Device VPN mode.</string>
+
+    <string name="app_updates">MehmanshahrVPN Updates</string>
+    <string name="current_version">Current version</string>
+    <string name="latest_version">Latest available version</string>
+    <string name="not_checked">Not checked</string>
+    <string name="update_status">Update status</string>
+    <string name="update_up_to_date">Up to date</string>
+    <string name="update_available">Update available</string>
+    <string name="update_downloading">Downloading update</string>
+    <string name="update_installing">Installing update</string>
+    <string name="update_checking">Checking for updates</string>
+    <string name="update_failed">Update check failed</string>
+    <string name="update_download_failed">Update download failed</string>
+    <string name="update_verification_failed">Update verification failed</string>
+    <string name="update_ready_install">Update verified and ready to install</string>
+    <string name="check_for_updates">Check for Updates</string>
+    <string name="download_update">Download update</string>
+    <string name="automatic_updates">Automatic updates</string>
+    <string name="automatic_updates_summary">Check for and download verified updates automatically over any available network</string>
+    <string name="release_notes">Release notes</string>
+    <string name="no_release_notes">No release notes available.</string>
+    <string name="new_update_title">New MehmanshahrVPN update available</string>
+    <string name="new_update_versions">Installed %1$s • Available %2$s</string>
+    <string name="start_update">Start update</string>
+    <string name="install_update">Install update</string>
+    <string name="update_notification_channel">App updates</string>
+    <string name="update_notification_channel_summary">MehmanshahrVPN update availability and installation</string>
+    <string name="install_permission_required">Allow MehmanshahrVPN to install updates, then try again.</string>
+    <string name="update_download_started">Update download started.</string>
+    <string name="update_no_download">No verified update is ready to install.</string>
+    <string name="widget_active">Protected</string>
+    <string name="widget_disconnected">Disconnected</string>
+    <string name="widget_connect">Connect</string>
+    <string name="widget_disconnect">Disconnect</string>
+    <string name="widget_connecting">Connecting...</string>
+    <string name="widget_disconnecting">Disconnecting...</string>
+    <string name="widget_location_unavailable">Location unavailable</string>
+    <string name="widget_ping">Ping: %1$s</string>
+    <string name="backup_restore">Backup &amp; Restore</string>
+    <string name="backup_settings">Export settings</string>
+    <string name="restore_settings">Import settings</string>
+    <string name="backup_exported">Settings backup exported.</string>
+    <string name="backup_restored">Settings restored.</string>
+    <string name="backup_failed">Could not process settings backup.</string>
+    <string name="restore_confirmation">Importing will replace compatible application settings. Continue?</string>
+    <string name="connection_from_lan">Connection from LAN</string>
+    <string name="connection_from_lan_summary">Allow local network devices to use the active MehmanshahrVPN tunnel.</string>
+    <string name="lan_enabled">Enabled</string>
+    <string name="lan_disabled">Disabled</string>
+    <string name="lan_pending">LAN sharing will start when VPN connects.</string>
+    <string name="lan_address">Local address: %1$s:%2$d</string>
+    <string name="lan_protocol">Protocol: SOCKS5</string>
+    <string name="lan_credentials">Protocol: SOCKS5 • user %1$s • pass %2$s</string>
+    <string name="copy_address">Copy address</string>
+    <string name="copy_port">Copy port</string>
+</resources>
