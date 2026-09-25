@@ -1,0 +1,49 @@
+name: Poll Rubika queue
+
+# Rubika stopped delivering to the webhook: it keeps accepting and queueing
+# customer messages but never calls the URL. The messages are still readable
+# through getUpdates, so a scheduled request to /poll drains the queue.
+#
+# This runs on the repository's existing Actions minutes rather than a Worker
+# cron, which the plan would not register.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poll-rubika
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Drain the bot queue
+        env:
+          WORKER_URL: ${{ vars.WORKER_URL }}
+          POLL_KEY: ${{ secrets.POLL_KEY }}
+        run: |
+          if [ -z "$WORKER_URL" ]; then
+            echo "WORKER_URL repository variable is not set; nothing to do."
+            exit 0
+          fi
+          # The key guards the endpoint from being polled by anyone who finds
+          # the URL; an unauthenticated poll would let a stranger burn the
+          # request rate or interfere with the queue.
+          for i in 1 2 3; do
+            body=$(curl -s --max-time 30 -H "X-Poll-Key: $POLL_KEY" "$WORKER_URL/poll")
+            if echo "$body" | grep -q '"ok"'; then
+              echo "$body"
+              exit 0
+            fi
+            echo "attempt $i: ${body:0:200}"
+            sleep 15
+          done
+          echo "the queue did not drain after three attempts"
+          exit 1
