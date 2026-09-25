@@ -366,10 +366,24 @@ public final class AetherVpnService extends VpnService {
             return START_NOT_STICKY;
         }
         if (ACTION_START.equals(action)) {
+            // The gate has to sit here, not in LoginActivity. The quick-settings
+            // tile and the home-screen widget both reach this service without
+            // ever opening an activity, so a check on the UI alone would leave
+            // the tunnel startable — which is how the tunnel used to be
+            // startable without ever seeing the password screen.
+            if (!AuthGate.isValid(this)) {
+                stateStore.edit().putBoolean("desiredConnected", false).apply();
+                String reason = getString(R.string.license_missing);
+                updateState("idle", reason);
+                sendLog(reason);
+                sendStatus("idle", reason);
+                publishStats();
+                return START_NOT_STICKY;
+            }
             stateStore.edit().putBoolean("desiredConnected", true).apply();
             Intent request = new Intent(intent);
             if (isRedundantStart(request)) {
-                sendLog("Connect request ignored; Aethon is already " + currentState + " with the same configuration");
+                sendLog("Connect request ignored; the tunnel is already " + currentState + " with the same configuration");
                 sendStatus(currentState, currentMessage);
                 publishStats();
                 return START_STICKY;

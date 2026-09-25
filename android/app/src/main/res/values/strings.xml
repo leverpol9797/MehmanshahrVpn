@@ -1,10 +1,32 @@
 <resources>
     <string name="app_name">MehmanshahrVpn</string>
-    <string name="login_title">برای ورود رمز عبور را وارد کنید</string>
-    <string name="login_password_hint">رمز عبور</string>
-    <string name="login_button">ورود</string>
-    <string name="login_note">برای دریافت رمز عبور به مغازه گلدوزی خلیلی مراجعه کنید</string>
-    <string name="login_wrong_password">رمز عبور نادرست است</string>
+
+    <!-- ── ورود با لایسنس امضاشده ─────────────────────────────────────── -->
+    <string name="login_title">برای استفاده، لایسنس خود را وارد کنید</string>
+    <string name="login_password_hint">لایسنس</string>
+    <string name="login_button">فعال‌سازی</string>
+    <string name="login_paste">کپی از کلیپ‌بورد</string>
+    <string name="login_wrong_password">این لایسنس معتبر نیست</string>
+    <string name="login_empty">ابتدا لایسنس را وارد یا از کلیپ‌بورد کپی کنید</string>
+    <string name="login_expired">اعتبار لایسنس شما تمام شده است. برای تمدید دوباره شمارهٔ خود را برای ربات بفرستید.</string>
+    <string name="login_not_yet_valid">اعتبار این لایسنس هنوز آغاز نشده. ساعت و تاریخ گوشی را بررسی کنید.</string>
+    <string name="login_malformed">متن لایسنس ناقص است. همان متنی را که ربات فرستاده، کامل کپی کنید.</string>
+    <string name="login_clipboard_empty">کلیپ‌بورد خالی است</string>
+    <string name="login_key_missing">این نسخه با کلید عمومی تنظیم نشده ساخته شده است. نسخهٔ معتبر را از ریپو دریافت کنید.</string>
+    <string name="license_missing">برای اتصال، ابتدا باید وارد شوید.</string>
+
+    <!-- ── ربات روبیکا ────────────────────────────────────────────────────── -->
+    <string name="license_bot_id" translatable="false">MehmanshahrVpnBot@</string>
+    <!-- TODO: با اسکیمای واقعی لینک عمیق روبیکا جایگزین شود. تا آن زمان
+         کاربر آیدی را کپی می‌کند و خودش وارد چت می‌شود. -->
+    <string name="license_bot_link" translatable="false">https://rubika.ir/</string>
+    <string name="license_bot_title">دریافت لایسنس از ربات روبیکا</string>
+    <string name="license_bot_step">شمارهٔ موبایل خود را برای این ربات در روبیکا بفرستید. پس از تأیید، لایسنتان همین‌جا ارسال می‌شود.</string>
+    <string name="license_bot_open">باز کردن روبیکا</string>
+    <string name="license_bot_copy">کپی آیدی</string>
+    <string name="license_bot_copied">آیدی ربات کپی شد</string>
+    <string name="login_bot_no_app">برنامهٔ روبیکا پیدا نشد. آیدی ربات را کپی کنید و در روبیکا جست‌وجو کنید.</string>
+
     <string name="about_creator">ساخته شده توسط Hossein Akhlaghi</string>
     <string name="app_version" translatable="false">v2.1.1</string>
     <string name="version_format" translatable="false">v%1$s</string>

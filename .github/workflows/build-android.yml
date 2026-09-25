@@ -49,6 +49,22 @@ jobs:
           for abi in armeabi-v7a arm64-v8a x86_64; do cp "$work/libs/$abi/libhev-socks5-tunnel.so" "android/app/src/main/jniLibs/$abi/"; done
           rm -rf "$work"
 
+      - name: Run unit tests
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --console=plain
+          # گزارش را به‌عنوان آرتیفکت نگه می‌داریم تا شکست‌ها قابل بررسی باشند
+          find app/build/reports/tests -name '*.html' -print || true
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+
       - name: Build Android Debug APKs
         run: |
           cd android
@@ -93,8 +109,7 @@ jobs:
           gh release create v2.1.1 release_apks/*.apk \
             --title "MehmanshahrVpn v2.1.1" \
             --notes "### MehmanshahrVpn Android Release
-            - **رمز ورود (فقط بار اول):** \`09372550259\`
-            - **توضیحات:** برای دریافت رمز عبور به مغازه گلدوزی خلیلی مراجعه کنید
+            - **ورود:** با لایسنس. شمارهٔ موبایل خود را برای ربات \`@MehmanshahrVpnBot\` در روبیکا بفرستید تا لایسنس صادر شود.
             - **توسعه دهنده:** ساخته شده توسط Hossein Akhlaghi
             
             #### فایل‌های دانلودی:
