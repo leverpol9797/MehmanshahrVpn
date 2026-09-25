@@ -209,24 +209,26 @@ public class LicenseVerifierTest {
      * code is now signed in, so these are the cases that matter most. */
 
     private static final String DEV_PUB = "DibZOE6GriLUV2hydbNaDorUhSl5f7XOfLVjrvFIHgg=";
+    private static final long DEV_NBF = 1790368726L;
+
     private static final String DEV_LIC = "{\"v\":1,\"sub\":\"u_devbound0001\",\"device\":\"MSV-7K2M-9QX4\",\"nbf\":1790368726,\"exp\":1798144726,\"tier\":\"user\",\"sig\":\"cHfQJfGySBqP2l24Ez+NlPtB/IuZP66G4ESqwUB/2WjaF2S2eBYQR5VReT1J6FWexW3E0oEQttYpruURjDUJAg==\"}";
 
     @Test public void aDeviceBoundLicenseWorksOnItsOwnPhone() {
         LicenseVerifier.Result r =
-                LicenseVerifier.verify(DEV_LIC, DEV_PUB, NBF + 1, "MSV-7K2M-9QX4");
+                LicenseVerifier.verify(DEV_LIC, DEV_PUB, DEV_NBF + 1, "MSV-7K2M-9QX4");
         assertEquals(LicenseVerifier.Status.VALID, r.status);
         assertEquals("MSV-7K2M-9QX4", r.device);
     }
 
     @Test public void theSameLicenseIsRejectedOnAnotherPhone() {
         LicenseVerifier.Result r =
-                LicenseVerifier.verify(DEV_LIC, DEV_PUB, NBF + 1, "MSV-AAAA-BBBB");
+                LicenseVerifier.verify(DEV_LIC, DEV_PUB, DEV_NBF + 1, "MSV-AAAA-BBBB");
         assertEquals(LicenseVerifier.Status.WRONG_DEVICE, r.status);
     }
 
     @Test public void theDeviceIsComparedWithoutRegardToCase() {
         assertEquals(LicenseVerifier.Status.VALID,
-                LicenseVerifier.verify(DEV_LIC, DEV_PUB, NBF + 1, "msv-7k2m-9qx4").status);
+                LicenseVerifier.verify(DEV_LIC, DEV_PUB, DEV_NBF + 1, "msv-7k2m-9qx4").status);
     }
 
     /** An unbound licence — one issued before this feature — still works. */
@@ -239,14 +241,14 @@ public class LicenseVerifierTest {
         // A null device means the caller has nothing to compare against. That
         // must not be treated as "any phone is fine".
         assertEquals(LicenseVerifier.Status.WRONG_DEVICE,
-                LicenseVerifier.verify(DEV_LIC, DEV_PUB, NBF + 1, null).status);
+                LicenseVerifier.verify(DEV_LIC, DEV_PUB, DEV_NBF + 1, null).status);
     }
 
     /** Only a valid signature may produce WRONG_DEVICE, never a forged one. */
     @Test public void aForgedLicenseDoesNotReportTheWrongDevice() {
         String forged = TEST_LICENSE.replace("MSV-", "XXX-");
         assertEquals(LicenseVerifier.Status.BAD_SIGNATURE,
-                LicenseVerifier.verify(forged, DEV_PUB, NBF + 1, "MSV-AAAA-BBBB").status);
+                LicenseVerifier.verify(forged, DEV_PUB, DEV_NBF + 1, "MSV-AAAA-BBBB").status);
     }
 
     /* ── malformed input ─────────────────────────────────────────────────── */
