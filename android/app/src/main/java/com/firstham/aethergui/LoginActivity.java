@@ -13,7 +13,6 @@ import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
@@ -47,11 +46,8 @@ public final class LoginActivity extends AppCompatActivity {
         binding = ActivityLoginBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (view, insets) -> {
-            androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            view.setPadding(0, bars.top, 0, bars.bottom);
-            return insets;
-        });
+        // The scroller carries android:fitsSystemWindows, so the system bars are
+        // handled by the framework instead of by hand here.
 
         if (!LicenseVerifier.isKeyConfigured()) {
             // A build shipped with the placeholder key. No license it is shown
