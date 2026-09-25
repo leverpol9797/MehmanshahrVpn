@@ -182,8 +182,13 @@ public final class LicenseVerifier {
             // Check the window before spending time on the curve. An expired
             // license still reports EXPIRED rather than BAD_SIGNATURE, because
             // the signature is what tells us the expiry is genuine.
+            //
+            // exp == 0 means the licence never expires. Licences are issued
+            // open-ended, so the field is only meaningful for the ones minted
+            // under the old fixed window. Treating 0 as "expired at the epoch"
+            // would lock every one of them out.
             boolean tooEarly = nowUnix < nbf;
-            boolean tooLate = nowUnix >= exp;
+            boolean tooLate = exp != 0L && nowUnix >= exp;
 
             if (!signatureHolds(subject, device, nbf, exp, tier, sigB64, publicKeyB64)) {
                 return new Result(Status.BAD_SIGNATURE, null, 0L, null);

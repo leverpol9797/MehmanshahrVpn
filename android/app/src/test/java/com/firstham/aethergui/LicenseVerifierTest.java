@@ -251,7 +251,55 @@ public class LicenseVerifierTest {
                 LicenseVerifier.verify(forged, DEV_PUB, DEV_NBF + 1, "MSV-AAAA-BBBB").status);
     }
 
-    /* ── malformed input ─────────────────────────────────────────────── */
+    /* ── open-ended licences ──────────────────────────────────────────────
+     * Licences are issued with exp = 0, meaning they never expire. The one
+     * behaviour that must hold is that zero is read as "no window" rather than
+     * "expired at the epoch" — that reading would reject every licence the
+     * panel ever mints. The vector below is signed by the real issuer
+     * (scripts/gen-testvector.js), not by hand, so it also pins the wire
+     * format for the zero case.
+     */
+
+    private static final String FOREVER_PUBLIC_KEY =
+            "kx7XBxnDRfIEhBGIzGwasZ3xK0WgX5VKSZiFutvVsgU=";
+
+    private static final String FOREVER_LICENSE =
+            "{\"v\":1,\"sub\":\"u_testvector0001\",\"device\":\"MSV-7K2M-9QX4\",\"nbf\":1790373781,"
+            + "\"exp\":0,\"tier\":\"user\","
+            + "\"sig\":\"n2ZGqxTqhAObkqqWJIWUu2yqMbYZyXRMz0c4W7FcYCDpT7bmwosPG8NA99iiFTeZGvQTEKAEZYbSOXpARbupBA==\"}";
+
+    /** Far past any plausible clock: a real licence would not survive this. */
+    private static final long CENTURY = 4_102_444_800L;
+
+    @Test public void anOpenEndedLicenceIsValidDecadesLater() {
+        assertEquals(LicenseVerifier.Status.VALID, LicenseVerifier.verify(
+                FOREVER_LICENSE, FOREVER_PUBLIC_KEY, CENTURY, "MSV-7K2M-9QX4").status);
+    }
+
+    @Test public void anOpenEndedLicenceIsStillDeviceBound() {
+        assertEquals(LicenseVerifier.Status.WRONG_DEVICE, LicenseVerifier.verify(
+                FOREVER_LICENSE, FOREVER_PUBLIC_KEY, CENTURY, "MSV-0000-0000").status);
+    }
+
+    /**
+     * An open-ended licence is the one worth attacking: a holder who can edit
+     * it into a licence for another handset has beaten both the binding and
+     * the window in one go. Moving the device changes a signed field, so this
+     * has to fail on the signature.
+     */
+    @Test public void anOpenEndedLicenceCannotBeEditedOntoAnotherHandset() {
+        String moved = FOREVER_LICENSE.replace("MSV-7K2M-9QX4", "MSV-0000-0000");
+        assertEquals(LicenseVerifier.Status.BAD_SIGNATURE, LicenseVerifier.verify(
+                moved, FOREVER_PUBLIC_KEY, CENTURY, "MSV-0000-0000").status);
+    }
+
+    /** A licence with a real window must still expire — the sentinel is not a blanket pass. */
+    @Test public void aDatedLicenceStillExpires() {
+        assertEquals(LicenseVerifier.Status.EXPIRED,
+                LicenseVerifier.verify(TEST_LICENSE, TEST_PUBLIC_KEY, EXP + 1, null).status);
+    }
+
+    /* ── malformed input─────────────────────────────────────────── */
 
     @Test public void malformedInputIsRejectedWithoutThrowing() {
         String[] junk = {
