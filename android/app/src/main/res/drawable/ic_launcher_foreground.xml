@@ -1,0 +1,25 @@
+<!--
+  Adaptive icon foreground: a shield with a keyhole cut out of it.
+
+  Drawn in the 108dp adaptive-icon canvas, where only the centre 72dp
+  survives the mask — the artwork below stays inside that safe zone so no
+  launcher crops the point off the shield.
+
+  The keyhole is part of the same path as the shield and the fill type is
+  evenOdd, so it punches a real hole through to the background rather than
+  painting a lighter shape on top.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Shield body with the keyhole subtracted. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,25 L77,35 L77,56 C77,69 67,79 54,86 C41,79 31,69 31,56 L31,35 Z
+                          M54,42 m-6.5,0 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0
+                          M51.4,48 L56.6,48 L58,65 L50,65 Z" />
+</vector>
