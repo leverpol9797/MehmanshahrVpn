@@ -104,20 +104,29 @@ jobs:
       # runs the tests, but a feature push must not replace the public release —
       # the step below deletes the existing tag first, so an unguarded trigger
       # means anyone with push access silently swaps the published APKs.
+      # The version is read from build.gradle rather than written out here, so
+      # a release can never be published under a tag that disagrees with the
+      # app: v2.3.0 was rebuilt and re-published twice, each time silently
+      # replacing the APKs a customer had already downloaded.
       - name: Publish to GitHub Releases
         if: github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v2.3.0 --yes || true
-          git tag -d v2.3.0 || true
-          gh release create v2.3.0 release_apks/*.apk \
-            --title "MehmanshahrVpn v2.3.0" \
+          VERSION=$(grep -oP "versionName '\K[^']+" android/app/build.gradle)
+          echo "version from build.gradle: $VERSION"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::v$VERSION already exists. Bump versionName instead of rebuilding the same tag."
+            exit 1
+          fi
+          gh release create "v$VERSION" release_apks/*.apk \
+            --title "MehmanshahrVpn v$VERSION" \
             --notes "### MehmanshahrVpn Android Release
             - **ورود:** با لایسنس. شمارهٔ موبایل خود را برای ربات \`@MehmanshahrVpnBot\` در روبیکا بفرستید تا لایسنس صادر شود.
+            - **اعتبار:** نامحدود؛ فقط روی همان گوشی که لایسنس برایش صادر شده کار می‌کند.
             - **توسعه دهنده:** ساخته شده توسط Hossein Akhlaghi
-            
+
             #### فایل‌های دانلودی:
-            - \`MehmanshahrVpn-v2.3.0-ARM64-v8a.apk\` : مخصوص گوشی‌های جدید (۶۴ بیتی)
-            - \`MehmanshahrVpn-v2.3.0-ARMv7.apk\` : مخصوص گوشی‌های قدیمی‌تر (۳۲ بیتی)
-            - \`MehmanshahrVpn-v2.3.0-Universal.apk\` : نسخه عمومی سازگار با تمام گوشی‌ها"
+            - \`MehmanshahrVpn-v$VERSION-ARM64-v8a.apk\` : مخصوص گوشی‌های جدید (۶۴ بیتی)
+            - \`MehmanshahrVpn-v$VERSION-ARMv7.apk\` : مخصوص گوشی‌های قدیمی‌تر (۳۲ بیتی)
+            - \`MehmanshahrVpn-v$VERSION-Universal.apk\` : نسخه عمومی سازگار با تمام گوشی‌ها"
