@@ -38,7 +38,7 @@ public final class LicenseVerifier {
      * never leaves the issuing service, which is the only reason a signature here
      * means anything.
      */
-    static final String PUBLIC_KEY_B64 = "REPLACE_WITH_PUBLIC_KEY_FROM_SELFTEST";
+    static final String PUBLIC_KEY_B64 = "AKBebL7SXL4ZPmjjXVyNDssEH6arIis6SIeLnmwLeAs=";
 
     private LicenseVerifier() { }
 
