@@ -4,6 +4,11 @@
     <!-- ── ورود با لایسنس امضاشده ─────────────────────────────────────── -->
     <string name="login_title">برای استفاده، لایسنس خود را وارد کنید</string>
     <string name="login_password_hint">لایسنس</string>
+    <string name="device_title">کد دستگاه شما</string>
+    <string name="device_step">برای اینکه لایسنس فقط روی همین گوشی کار کند، این کد را همراه شمارهٔ موبایل خود برای ربات بفرستید.</string>
+    <string name="device_copy">کپی کد دستگاه</string>
+    <string name="device_copied">کد دستگاه کپی شد</string>
+    <string name="login_wrong_device">این لایسنس برای گوشی دیگری صادر شده است. کد دستگاه را از صفحهٔ این گوشی برای ربات بفرستید.</string>
     <string name="login_button">فعال‌سازی</string>
     <string name="login_paste">کپی از کلیپ‌بورد</string>
     <string name="login_wrong_password">این لایسنس معتبر نیست</string>

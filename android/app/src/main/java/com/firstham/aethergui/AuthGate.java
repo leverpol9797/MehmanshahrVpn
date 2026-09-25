@@ -29,6 +29,11 @@ public final class AuthGate {
     private AuthGate() { }
 
     /** The stored license text, or null when there is none. */
+    /** Current time in whole seconds, which is what the signed fields use. */
+    private static long now() {
+        return System.currentTimeMillis() / 1000L;
+    }
+
     public static String stored(Context context) {
         String v = prefs(context).getString(KEY_LICENSE, null);
         return TextUtils.isEmpty(v) ? null : v;
@@ -42,7 +47,8 @@ public final class AuthGate {
      *         and should not both read as "wrong".
      */
     public static LicenseVerifier.Result submit(Context context, String licenseJson) {
-        LicenseVerifier.Result result = LicenseVerifier.verify(licenseJson);
+        LicenseVerifier.Result result = LicenseVerifier.verify(licenseJson, LicenseVerifier.PUBLIC_KEY_B64,
+                now(), DeviceId.get(context));
         if (result.isValid()) {
             prefs(context).edit()
                     .putString(KEY_LICENSE, licenseJson.trim())
@@ -62,14 +68,16 @@ public final class AuthGate {
      */
     public static boolean isValid(Context context) {
         String stored = stored(context);
-        return stored != null && LicenseVerifier.verify(stored).isValid();
+        return stored != null && LicenseVerifier.verify(stored, LicenseVerifier.PUBLIC_KEY_B64,
+                now(), DeviceId.get(context)).isValid();
     }
 
     /** Re-check the stored license and drop it if it has lapsed. */
     public static LicenseVerifier.Result revalidate(Context context) {
         String stored = stored(context);
         if (stored == null) return LicenseVerifier.Result.none();
-        LicenseVerifier.Result result = LicenseVerifier.verify(stored);
+        LicenseVerifier.Result result = LicenseVerifier.verify(stored, LicenseVerifier.PUBLIC_KEY_B64,
+                now(), DeviceId.get(context));
         if (!result.isValid()) clear(context);
         return result;
     }

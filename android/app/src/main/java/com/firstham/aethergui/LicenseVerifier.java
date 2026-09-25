@@ -54,7 +54,9 @@ public final class LicenseVerifier {
         /** Signed correctly, but nbf is in the future — usually a wrong device clock. */
         NOT_YET_VALID,
         /** Well-formed JSON, but not something this verifier understands. */
-        MALFORMED
+        MALFORMED,
+        /** Genuine license, correctly signed, but issued to a different phone. */
+        WRONG_DEVICE
     }
 
     public static final class Result {
@@ -63,12 +65,19 @@ public final class LicenseVerifier {
         public final String subject;
         public final long expiresAt;
         public final String tier;
+        /** Device the license is bound to; null or empty when unbound. */
+        public final String device;
 
         private Result(Status status, String subject, long expiresAt, String tier) {
+            this(status, subject, expiresAt, tier, null);
+        }
+
+        private Result(Status status, String subject, long expiresAt, String tier, String device) {
             this.status = status;
             this.subject = subject;
             this.expiresAt = expiresAt;
             this.tier = tier;
+            this.device = device;
         }
 
         public boolean isValid() { return status == Status.VALID; }
@@ -139,6 +148,16 @@ public final class LicenseVerifier {
      * {@link #PUBLIC_KEY_B64} or wait a century for an expiry.
      */
     public static Result verify(String licenseJson, String publicKeyB64, long nowUnix) {
+        return verify(licenseJson, publicKeyB64, nowUnix, null);
+    }
+
+    /**
+     * @param thisDevice the code this handset presents, or null when the caller
+     *                   has no device to check against (an unbound license, or
+     *                   a context-free test).
+     */
+    public static Result verify(String licenseJson, String publicKeyB64, long nowUnix,
+                                String thisDevice) {
         if (licenseJson == null || licenseJson.isEmpty()) {
             return new Result(Status.MALFORMED, null, 0L, null);
         }
@@ -170,9 +189,17 @@ public final class LicenseVerifier {
                 return new Result(Status.BAD_SIGNATURE, null, 0L, null);
             }
 
-            if (tooEarly) return new Result(Status.NOT_YET_VALID, subject, exp, tier);
-            if (tooLate) return new Result(Status.EXPIRED, subject, exp, tier);
-            return new Result(Status.VALID, subject, exp, tier);
+            if (tooEarly) return new Result(Status.NOT_YET_VALID, subject, exp, tier, device);
+            if (tooLate) return new Result(Status.EXPIRED, subject, exp, tier, device);
+
+            // Only after the signature holds: a device mismatch on a forged
+            // license is just a bad signature, and saying "wrong phone" would
+            // leak that the request was otherwise well-formed.
+            if (device != null && !device.isEmpty()
+                    && (thisDevice == null || !device.equalsIgnoreCase(thisDevice))) {
+                return new Result(Status.WRONG_DEVICE, subject, exp, tier, device);
+            }
+            return new Result(Status.VALID, subject, exp, tier, device);
 
         } catch (Exception e) {
             return new Result(Status.MALFORMED, null, 0L, null);

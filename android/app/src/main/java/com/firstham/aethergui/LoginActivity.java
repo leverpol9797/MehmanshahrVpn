@@ -64,14 +64,39 @@ public final class LoginActivity extends AppCompatActivity {
 
         binding.loginButton.setOnClickListener(v -> submit());
         binding.pasteButton.setOnClickListener(v -> pasteInto());
+        binding.deviceCopyButton.setOnClickListener(v -> copyRequest());
         binding.botCopyButton.setOnClickListener(v -> copyBotId());
         binding.botOpenButton.setOnClickListener(v -> openRubika());
+
+        showDeviceCode();
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() {
                 finishAffinity();
             }
         });
+    }
+
+    private void showDeviceCode() {
+        binding.deviceCodeText.setText(DeviceId.get(this));
+    }
+
+    /**
+     * Copies the device code.
+     *
+     * The app cannot read the handset's own number without a permission the
+     * user would rightly refuse, so the code is copied on its own and the
+     * customer sends it along with their number. The bot accepts either: a
+     * message carrying both, or the code alone.
+     */
+    private void copyRequest() {
+        ClipboardManager clipboard =
+                (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(
+                    ClipData.newPlainText("device", DeviceId.get(this)));
+            showStatus(getString(R.string.device_copied), false);
+        }
     }
 
     /**
