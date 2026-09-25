@@ -166,6 +166,11 @@ public final class LoginActivity extends AppCompatActivity {
                 return getString(R.string.login_not_yet_valid);
             case MALFORMED:
                 return getString(R.string.login_malformed);
+            case WRONG_DEVICE:
+                // The licence is genuine, just not for this handset. Reporting
+                // it as "not valid" reads as a cracked or expired licence and
+                // sends the customer off to ask for a refund.
+                return getString(R.string.login_wrong_device);
             case BAD_SIGNATURE:
             default:
                 return getString(R.string.login_wrong_password);

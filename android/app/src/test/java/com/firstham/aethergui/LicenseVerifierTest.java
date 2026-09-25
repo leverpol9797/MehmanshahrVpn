@@ -251,7 +251,7 @@ public class LicenseVerifierTest {
                 LicenseVerifier.verify(forged, DEV_PUB, DEV_NBF + 1, "MSV-AAAA-BBBB").status);
     }
 
-    /* ── malformed input ─────────────────────────────────────────────────── */
+    /* ── malformed input ─────────────────────────────────────────────── */
 
     @Test public void malformedInputIsRejectedWithoutThrowing() {
         String[] junk = {
