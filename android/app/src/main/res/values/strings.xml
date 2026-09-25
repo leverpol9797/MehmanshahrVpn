@@ -17,9 +17,10 @@
 
     <!-- ── ربات روبیکا ────────────────────────────────────────────────────── -->
     <string name="license_bot_id" translatable="false">MehmanshahrVpnBot@</string>
-    <!-- TODO: با اسکیمای واقعی لینک عمیق روبیکا جایگزین شود. تا آن زمان
-         کاربر آیدی را کپی می‌کند و خودش وارد چت می‌شود. -->
-    <string name="license_bot_link" translatable="false">https://rubika.ir/</string>
+    <!-- قرارداد نام‌گذاری روبیکا «نام@» است: علامت @ در انتها می‌آید.
+         لینک مستقیم هم یک URL ساده است و اسکیمای اختصاصی ندارد:
+         https://rubika.ir/BotFather · https://rubika.ir/chattino -->
+    <string name="license_bot_link" translatable="false">https://rubika.ir/MehmanshahrVpnBot</string>
     <string name="license_bot_title">دریافت لایسنس از ربات روبیکا</string>
     <string name="license_bot_step">شمارهٔ موبایل خود را برای این ربات در روبیکا بفرستید. پس از تأیید، لایسنتان همین‌جا ارسال می‌شود.</string>
     <string name="license_bot_open">باز کردن روبیکا</string>

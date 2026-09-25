@@ -75,9 +75,8 @@ public final class LoginActivity extends AppCompatActivity {
     /**
      * Copies the bot id so it can be pasted into Rubika's search box.
      *
-     * No tap-through deep link on purpose: Rubika's URL scheme is not in the bot
-     * API reference, and guessing one either throws or opens something
-     * unintended. Open the app and paste instead.
+     * Rubika addresses bots as name@ (the @ trails), so the string copied here
+     * matches what the user sees in the app.
      */
     private void copyBotId() {
         ClipboardManager clipboard =
