@@ -195,7 +195,7 @@ public final class AetherVpnService extends VpnService {
     private static final String TAG = "AetherVpnService";
 
     /**
-     * Live published state, or {@code null} while no service instance exists. Every Aethon UI
+     * Live published state, or {@code null} while no service instance exists. Every UI
      * surface runs in this same process, so the Quick Settings tile can read the real state here
      * instead of a SharedPreferences value that survives process death and goes stale.
      */
@@ -1075,7 +1075,7 @@ public final class AetherVpnService extends VpnService {
             try (SSLSocket ssl = verifiedTlsSocket(factory, tunnel, "example.com", 443, timeoutMs)) {
                 StringBuilder padding = new StringBuilder(Math.max(64, candidate));
                 while (padding.length() < candidate) padding.append('a');
-                byte[] payload = ("GET / HTTP/1.1\r\nHost: example.com\r\nX-Aethon-MTU-Probe: " + padding
+                byte[] payload = ("GET / HTTP/1.1\r\nHost: example.com\r\nX-Mehmanshahr-MTU-Probe: " + padding
                         + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
                 OutputStream output = ssl.getOutputStream();
                 output.write(payload);
@@ -2155,7 +2155,7 @@ public final class AetherVpnService extends VpnService {
             long now = System.currentTimeMillis();
             if (previousWidgetPing != lastPing || now - lastWidgetUpdateAt >= 6_000L) {
                 lastWidgetUpdateAt = now;
-                AethonWidgetProvider.update(this);
+                MehmanshahrWidgetProvider.update(this);
             }
         }
         maybeCheckTunnelHealth();
@@ -2415,8 +2415,8 @@ public final class AetherVpnService extends VpnService {
         stateStore.edit().putString("state", currentState).putString("message", currentMessage).putString("endpoint", currentEndpoint)
                 .putString("selectedProtocol", selectedProtocol).putBoolean("smartSelected", smartSelected).apply();
         sendStatus(currentState, currentMessage);
-        AethonTileService.requestUpdate(this);
-        AethonWidgetProvider.update(this);
+        MehmanshahrTileService.requestUpdate(this);
+        MehmanshahrWidgetProvider.update(this);
     }
 
     private void sendStatus(String state, String message) {
@@ -2528,7 +2528,7 @@ public final class AetherVpnService extends VpnService {
         Intent open = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent content = PendingIntent.getActivity(this, 2, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification alert = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_aethon_mono)
+                .setSmallIcon(R.drawable.ic_app_mono)
                 .setContentTitle(getString(R.string.service_protection_lost_title))
                 .setContentText(getString(R.string.service_protection_lost, reason))
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(getString(R.string.service_protection_lost, reason)))
@@ -2552,7 +2552,7 @@ public final class AetherVpnService extends VpnService {
         Intent stop = new Intent(this, AetherVpnService.class).setAction(ACTION_STOP);
         PendingIntent disconnect = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_aethon_mono)
+                .setSmallIcon(R.drawable.ic_app_mono)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setOngoing(true)
@@ -2604,7 +2604,7 @@ public final class AetherVpnService extends VpnService {
         // No instance is left to answer for the live state; the tile falls back to the persisted
         // value combined with its own ConnectivityManager cross-check.
         LIVE_STATE.set(null);
-        AethonTileService.requestUpdate(this);
+        MehmanshahrTileService.requestUpdate(this);
         telemetry.shutdownNow();
         lifecycle.shutdownNow();
         worker.shutdownNow();

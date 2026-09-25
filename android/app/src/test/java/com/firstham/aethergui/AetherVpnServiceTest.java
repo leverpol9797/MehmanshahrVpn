@@ -207,29 +207,29 @@ public final class AetherVpnServiceTest {
     @Test public void tileIsActiveWheneverTheInterfaceStillCarriesRoutes() {
         // STATE_ACTIVE = 2, STATE_INACTIVE = 1. "blocked" keeps the TUN up with traffic fail-closed,
         // so the tile has to stay active and clickable or the user cannot release it from the shade.
-        assertEquals(2, AethonTileService.tileState("connected"));
-        assertEquals(2, AethonTileService.tileState("blocked"));
+        assertEquals(2, MehmanshahrTileService.tileState("connected"));
+        assertEquals(2, MehmanshahrTileService.tileState("blocked"));
         for (String state : new String[]{"disconnected", "error", "starting", "smart-testing",
                 "scanning", "securing", "reconnecting", "disconnecting", ""}) {
-            assertEquals(state, 1, AethonTileService.tileState(state));
+            assertEquals(state, 1, MehmanshahrTileService.tileState(state));
         }
     }
 
     @Test public void tileNeverTrustsAStaleConnectedStateWithoutAVpnTransport() {
         // Service process killed while connected: the persisted value still says "connected" but
         // Android reports no VPN transport, so the tile must not claim protection.
-        assertEquals("disconnected", AethonTileService.reconciledState("connected", false));
-        assertEquals("disconnected", AethonTileService.reconciledState("blocked", false));
-        assertEquals("disconnected", AethonTileService.reconciledState("starting", false));
-        assertEquals("disconnected", AethonTileService.reconciledState("reconnecting", false));
-        assertEquals("disconnected", AethonTileService.reconciledState("disconnecting", false));
-        assertEquals("disconnected", AethonTileService.reconciledState(null, false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState("connected", false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState("blocked", false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState("starting", false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState("reconnecting", false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState("disconnecting", false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState(null, false));
         // A real VPN transport corroborates the persisted state, so it is preserved verbatim.
-        assertEquals("connected", AethonTileService.reconciledState("connected", true));
-        assertEquals("blocked", AethonTileService.reconciledState("blocked", true));
+        assertEquals("connected", MehmanshahrTileService.reconciledState("connected", true));
+        assertEquals("blocked", MehmanshahrTileService.reconciledState("blocked", true));
         // "error" is a terminal state the user should still see, and it is already inactive.
-        assertEquals("error", AethonTileService.reconciledState("error", false));
-        assertEquals("disconnected", AethonTileService.reconciledState("disconnected", false));
+        assertEquals("error", MehmanshahrTileService.reconciledState("error", false));
+        assertEquals("disconnected", MehmanshahrTileService.reconciledState("disconnected", false));
     }
 
     @Test public void everyDisconnectableStateIsAlsoClickableOnTheTile() {
@@ -238,7 +238,7 @@ public final class AetherVpnServiceTest {
         for (String state : new String[]{"starting", "smart-testing", "scanning", "securing",
                 "connected", "reconnecting", "disconnecting", "blocked"}) {
             assertTrue(state, VpnConnectionController.canDisconnect(state));
-            assertTrue(state, AethonTileService.tileState(state) != 0);
+            assertTrue(state, MehmanshahrTileService.tileState(state) != 0);
         }
         assertFalse(VpnConnectionController.canDisconnect("error"));
         assertFalse(VpnConnectionController.canDisconnect("disconnected"));
@@ -264,13 +264,13 @@ public final class AetherVpnServiceTest {
         // state - if any mapped to STATE_UNAVAILABLE (0) the shade would render it unclickable.
         for (String state : new String[]{"starting", "smart-testing", "scanning", "securing",
                 "connected", "reconnecting", "disconnecting", "blocked", "disconnected", "error"}) {
-            int tile = AethonTileService.tileState(state);
+            int tile = MehmanshahrTileService.tileState(state);
             assertTrue(state, tile == 1 || tile == 2);
         }
         // The two states Android itself corroborates as an active VPN are the only active ones.
-        assertEquals(2, AethonTileService.tileState("connected"));
-        assertEquals(2, AethonTileService.tileState("blocked"));
-        assertEquals(1, AethonTileService.tileState("disconnecting"));
+        assertEquals(2, MehmanshahrTileService.tileState("connected"));
+        assertEquals(2, MehmanshahrTileService.tileState("blocked"));
+        assertEquals(1, MehmanshahrTileService.tileState("disconnecting"));
     }
 
     @Test public void everyTrafficGateTargetIsIndependentAndActuallyUsable() {

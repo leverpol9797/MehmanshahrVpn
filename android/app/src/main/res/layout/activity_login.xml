@@ -20,7 +20,7 @@
             android:layout_width="76dp"
             android:layout_height="76dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_aethon_mono"
+            android:src="@drawable/ic_app_mono"
             app:tint="@color/blue_600" />
 
         <TextView

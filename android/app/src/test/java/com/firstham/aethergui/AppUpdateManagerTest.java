@@ -21,8 +21,8 @@ public final class AppUpdateManagerTest {
     }
 
     @Test public void checksumFileSelectsExactAsset() {
-        String sums = "aaa  Aethon_1.2_android-arm64.apk\nabcdef  Aethon_1.2_android-universal.apk\n";
-        assertEquals("abcdef", AppUpdateManager.checksumFromFile(sums, "Aethon_1.2_android-universal.apk"));
+        String sums = "aaa  MehmanshahrVpn_1.2_android-arm64.apk\nabcdef  MehmanshahrVpn_1.2_android-universal.apk\n";
+        assertEquals("abcdef", AppUpdateManager.checksumFromFile(sums, "MehmanshahrVpn_1.2_android-universal.apk"));
     }
 
     @Test public void updateChecksAreRateLimitedToTheCheckInterval() {
