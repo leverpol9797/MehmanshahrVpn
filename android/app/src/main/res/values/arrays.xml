@@ -1,9 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Persian is the base resource set, so a fresh install is fully translated
+  without choosing a language first. values-en/arrays.xml holds the English.
+
+  The item order is load-bearing and must stay aligned with the matching
+  index arrays in VpnConnectionController:
+      PROTOCOLS = { masque, wg, gool, smart }
+      SCANS     = { balanced, turbo, thorough, stealth, ironclad }
+      IP_MODES  = { v4, v6, both }
+  A stored preference is an index, so reordering items silently changes
+  which mode an existing user gets.
+-->
 <resources>
-    <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WARP-in-WARP</item><item>Smart Connect</item></string-array>
-    <string-array name="scan_labels"><item>Balanced</item><item>Turbo (recommended)</item><item>Thorough</item><item>Stealth</item><item>Ironclad verification</item></string-array>
-    <string-array name="transport_labels"><item>HTTP/3 (QUIC)</item><item>HTTP/2 (TCP, recommended)</item></string-array>
-    <string-array name="ip_labels"><item>IPv4 (recommended)</item><item>IPv6</item><item>IPv4 + IPv6</item></string-array>
-    <string-array name="obfuscation_labels"><item>Firewall (recommended)</item><item>GFW</item><item>Balanced</item><item>Aggressive</item><item>Off</item></string-array>
-    <string-array name="theme_labels"><item>System default</item><item>Light</item><item>Dark</item></string-array>
+    <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WARP-in-WARP</item><item>اتصال هوشمند</item></string-array>
+    <string-array name="scan_labels"><item>متعادل</item><item>توربو (پیشنهادی)</item><item>کامل</item><item>مخفی</item><item>اعتبارسنجی سخت‌گیرانه</item></string-array>
+    <string-array name="transport_labels"><item>HTTP/3 (QUIC)</item><item>HTTP/2 (TCP، پیشنهادی)</item></string-array>
+    <string-array name="ip_labels"><item>IPv4 (پیشنهادی)</item><item>IPv6</item><item>IPv4 + IPv6</item></string-array>
+    <string-array name="obfuscation_labels"><item>فایروال (پیشنهادی)</item><item>GFW</item><item>متعادل</item><item>تهاجمی</item><item>خاموش</item></string-array>
+    <string-array name="theme_labels"><item>پیش‌فرض سیستم</item><item>روشن</item><item>تیره</item></string-array>
     <string-array name="language_labels"><item>فارسی</item><item>English</item></string-array>
 </resources>
