@@ -100,7 +100,12 @@ jobs:
           name: MehmanshahrVpn-Release-APKs
           path: release_apks/*.apk
 
+      # Only the default branch publishes. Every other branch still builds and
+      # runs the tests, but a feature push must not replace the public release —
+      # the step below deletes the existing tag first, so an unguarded trigger
+      # means anyone with push access silently swaps the published APKs.
       - name: Publish to GitHub Releases
+        if: github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
