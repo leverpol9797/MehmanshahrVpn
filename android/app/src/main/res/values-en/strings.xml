@@ -8,13 +8,13 @@
     <string name="device_step">So the licence works only on this phone, send this code with your number to the bot.</string>
     <string name="device_copy">Copy device code</string>
     <string name="device_copied">Device code copied</string>
-    <string name="login_wrong_device">This licence was issued for a different phone. Send this phone's device code to the bot.</string>
+    <string name="login_wrong_device">This licence was issued for a different phone. Send this phone\'s device code to the bot.</string>
     <string name="login_button">Activate</string>
     <string name="login_paste">Copy from clipboard</string>
     <string name="login_wrong_password">This licence is not valid</string>
     <string name="login_empty">Paste a licence or copy one from the clipboard first</string>
     <string name="login_expired">Your licence has expired. Send your number to the bot to renew.</string>
-    <string name="login_not_yet_valid">This licence has not started yet. Check the phone's date and time.</string>
+    <string name="login_not_yet_valid">This licence has not started yet. Check the phone\'s date and time.</string>
     <string name="login_malformed">The licence text is incomplete. Copy the whole message the bot sent.</string>
     <string name="login_clipboard_empty">The clipboard is empty</string>
     <string name="login_key_missing_title">This build is not valid</string>
