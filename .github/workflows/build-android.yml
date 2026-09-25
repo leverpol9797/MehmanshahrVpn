@@ -81,18 +81,18 @@ jobs:
             name=$(basename "$f")
             echo "Processing $name"
             if [[ "$name" == *"arm64-v8a"* ]]; then
-              cp "$f" release_apks/MehmanshahrVpn-v2.1.1-ARM64-v8a.apk
+              cp "$f" release_apks/MehmanshahrVpn-v2.2.0-ARM64-v8a.apk
             elif [[ "$name" == *"armeabi-v7a"* ]]; then
-              cp "$f" release_apks/MehmanshahrVpn-v2.1.1-ARMv7.apk
+              cp "$f" release_apks/MehmanshahrVpn-v2.2.0-ARMv7.apk
             elif [[ "$name" == *"universal"* ]]; then
-              cp "$f" release_apks/MehmanshahrVpn-v2.1.1-Universal.apk
+              cp "$f" release_apks/MehmanshahrVpn-v2.2.0-Universal.apk
             else
               cp "$f" "release_apks/$name"
             fi
           done
           ls -la release_apks
-          test -f release_apks/MehmanshahrVpn-v2.1.1-ARM64-v8a.apk
-          test -f release_apks/MehmanshahrVpn-v2.1.1-ARMv7.apk
+          test -f release_apks/MehmanshahrVpn-v2.2.0-ARM64-v8a.apk
+          test -f release_apks/MehmanshahrVpn-v2.2.0-ARMv7.apk
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -109,15 +109,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v2.1.1 --yes || true
-          git tag -d v2.1.1 || true
-          gh release create v2.1.1 release_apks/*.apk \
-            --title "MehmanshahrVpn v2.1.1" \
+          gh release delete v2.2.0 --yes || true
+          git tag -d v2.2.0 || true
+          gh release create v2.2.0 release_apks/*.apk \
+            --title "MehmanshahrVpn v2.2.0" \
             --notes "### MehmanshahrVpn Android Release
             - **ورود:** با لایسنس. شمارهٔ موبایل خود را برای ربات \`@MehmanshahrVpnBot\` در روبیکا بفرستید تا لایسنس صادر شود.
             - **توسعه دهنده:** ساخته شده توسط Hossein Akhlaghi
             
             #### فایل‌های دانلودی:
-            - \`MehmanshahrVpn-v2.1.1-ARM64-v8a.apk\` : مخصوص گوشی‌های جدید (۶۴ بیتی)
-            - \`MehmanshahrVpn-v2.1.1-ARMv7.apk\` : مخصوص گوشی‌های قدیمی‌تر (۳۲ بیتی)
-            - \`MehmanshahrVpn-v2.1.1-Universal.apk\` : نسخه عمومی سازگار با تمام گوشی‌ها"
+            - \`MehmanshahrVpn-v2.2.0-ARM64-v8a.apk\` : مخصوص گوشی‌های جدید (۶۴ بیتی)
+            - \`MehmanshahrVpn-v2.2.0-ARMv7.apk\` : مخصوص گوشی‌های قدیمی‌تر (۳۲ بیتی)
+            - \`MehmanshahrVpn-v2.2.0-Universal.apk\` : نسخه عمومی سازگار با تمام گوشی‌ها"
