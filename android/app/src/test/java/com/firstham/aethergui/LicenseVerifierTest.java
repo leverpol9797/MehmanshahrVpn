@@ -209,7 +209,7 @@ public class LicenseVerifierTest {
      * code is now signed in, so these are the cases that matter most. */
 
     private static final String DEV_PUB = "DibZOE6GriLUV2hydbNaDorUhSl5f7XOfLVjrvFIHgg=";
-    private static final String DEV_LIC = "{"v":1,"sub":"u_devbound0001","device":"MSV-7K2M-9QX4","nbf":1790368726,"exp":1798144726,"tier":"user","sig":"cHfQJfGySBqP2l24Ez+NlPtB/IuZP66G4ESqwUB/2WjaF2S2eBYQR5VReT1J6FWexW3E0oEQttYpruURjDUJAg=="}";
+    private static final String DEV_LIC = "{\"v\":1,\"sub\":\"u_devbound0001\",\"device\":\"MSV-7K2M-9QX4\",\"nbf\":1790368726,\"exp\":1798144726,\"tier\":\"user\",\"sig\":\"cHfQJfGySBqP2l24Ez+NlPtB/IuZP66G4ESqwUB/2WjaF2S2eBYQR5VReT1J6FWexW3E0oEQttYpruURjDUJAg==\"}";
 
     @Test public void aDeviceBoundLicenseWorksOnItsOwnPhone() {
         LicenseVerifier.Result r =
