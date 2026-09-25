@@ -157,8 +157,13 @@ public final class LicenseVerifier {
                     publicKeyBytes, EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519));
             EdDSAPublicKey key = new EdDSAPublicKey(spec);
 
-            return new EdDSAEngine(MessageDigest.getInstance("SHA-512"))
-                    .verify(canonical(subject, device, nbf, exp, tier), signature, key);
+            // EdDSAEngine extends java.security.Signature, so the key goes in
+            // through initVerify and the message through verifyOneShot. There is
+            // no verify(data, sig, key) overload — that is the API of other
+            // Ed25519 libraries, not this one.
+            EdDSAEngine engine = new EdDSAEngine(MessageDigest.getInstance("SHA-512"));
+            engine.initVerify(key);
+            return engine.verifyOneShot(canonical(subject, device, nbf, exp, tier), signature);
 
         } catch (Exception e) {
             return false;
