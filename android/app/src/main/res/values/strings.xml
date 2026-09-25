@@ -35,7 +35,7 @@
     <string name="login_bot_no_app">برنامهٔ روبیکا پیدا نشد. آیدی ربات را کپی کنید و در روبیکا جست‌وجو کنید.</string>
 
     <string name="about_creator">ساخته شده توسط Hossein Akhlaghi</string>
-    <string name="app_version" translatable="false">v2.4.0</string>
+    <string name="app_version" translatable="false">v2.4.1</string>
     <string name="version_format" translatable="false">v%1$s</string>
     <string name="default_socks_address" translatable="false">127.0.0.1:1819</string>
     <string name="default_mtu" translatable="false">1360</string>

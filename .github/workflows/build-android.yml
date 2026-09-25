@@ -73,6 +73,11 @@ jobs:
 
       - name: Prepare Release APK Files
         run: |
+          # Read here as well as in the publish step: these are separate shell
+          # invocations, so a variable set in one is not visible in the other,
+          # and the file names have to carry the same version as the tag.
+          VERSION=$(grep -oP "versionName '\K[^']+" android/app/build.gradle)
+          echo "version from build.gradle: $VERSION"
           mkdir -p release_apks
           find android/app/build/outputs/apk -type f -name '*.apk' -print
           apk_dir="android/app/build/outputs/apk/debug"
@@ -81,18 +86,18 @@ jobs:
             name=$(basename "$f")
             echo "Processing $name"
             if [[ "$name" == *"arm64-v8a"* ]]; then
-              cp "$f" release_apks/MehmanshahrVpn-v2.3.0-ARM64-v8a.apk
+              cp "$f" release_apks/MehmanshahrVpn-v$VERSION-ARM64-v8a.apk
             elif [[ "$name" == *"armeabi-v7a"* ]]; then
-              cp "$f" release_apks/MehmanshahrVpn-v2.3.0-ARMv7.apk
+              cp "$f" release_apks/MehmanshahrVpn-v$VERSION-ARMv7.apk
             elif [[ "$name" == *"universal"* ]]; then
-              cp "$f" release_apks/MehmanshahrVpn-v2.3.0-Universal.apk
+              cp "$f" release_apks/MehmanshahrVpn-v$VERSION-Universal.apk
             else
               cp "$f" "release_apks/$name"
             fi
           done
           ls -la release_apks
-          test -f release_apks/MehmanshahrVpn-v2.3.0-ARM64-v8a.apk
-          test -f release_apks/MehmanshahrVpn-v2.3.0-ARMv7.apk
+          test -f release_apks/MehmanshahrVpn-v$VERSION-ARM64-v8a.apk
+          test -f release_apks/MehmanshahrVpn-v$VERSION-ARMv7.apk
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
