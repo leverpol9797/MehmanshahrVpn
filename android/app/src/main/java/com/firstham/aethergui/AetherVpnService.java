@@ -603,7 +603,7 @@ public final class AetherVpnService extends VpnService {
             ensureConnectNotTimedOut(session);
             connectedAt = System.currentTimeMillis();
             updateState("connected", getString(R.string.service_protected));
-            updateNotification(getString(smartSelected ? R.string.service_smart_protected : R.string.service_aethon_protected));
+            updateNotification(getString(smartSelected ? R.string.service_smart_protected : R.string.service_vpn_protected));
             publishedConnected = true;
         }
         clearConnectDeadline(session);
