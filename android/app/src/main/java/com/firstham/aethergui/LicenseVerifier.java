@@ -95,6 +95,41 @@ public final class LicenseVerifier {
 
     /* ── verification ──────────────────────────────────────────────────────── */
 
+    /**
+     * Pull the license object out of whatever the user pasted.
+     *
+     * The license arrives as a chat message, and nobody selects four lines out of
+     * a sentence and gets the brackets exactly right. So the whole message is
+     * accepted and the JSON object is taken from it.
+     *
+     * Brace counting is string-aware: a "{" inside the base64 signature or a
+     * quoted value must not be mistaken for the end of the object, which is
+     * what a naive first-{ to last-} slice would do.
+     */
+    static String extractJson(String pasted) {
+        if (pasted == null) return "";
+        String s = pasted.trim();
+        if (s.startsWith("{") && s.endsWith("}")) return s;
+
+        int depth = 0, start = -1;
+        boolean inString = false, escaped = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (escaped) { escaped = false; continue; }
+            if (c == '\\' && inString) { escaped = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c == '{') {
+                if (depth == 0) start = i;
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0 && start >= 0) return s.substring(start, i + 1);
+            }
+        }
+        return s;
+    }
+
     public static Result verify(String licenseJson) {
         return verify(licenseJson, PUBLIC_KEY_B64, System.currentTimeMillis() / 1000L);
     }
@@ -110,7 +145,7 @@ public final class LicenseVerifier {
 
         JSONObject o;
         try {
-            o = new JSONObject(licenseJson.trim());
+            o = new JSONObject(extractJson(licenseJson));
         } catch (Exception e) {
             return new Result(Status.MALFORMED, null, 0L, null);
         }

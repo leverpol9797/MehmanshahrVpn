@@ -120,7 +120,88 @@ public class LicenseVerifierTest {
         assertEquals(LicenseVerifier.Status.NOT_YET_VALID, r.status);
     }
 
-    /* ── rubbish input ─────────────────────────────────────────────────────── */
+    /* ── the message the bot actually sends ────────────────────────────────── */
+
+    /**
+     * The real delivery, pasted in full. This is the shape a customer has on
+     * their clipboard after long-pressing the bot's message, and asking them
+     * to hand-pick the JSON out of it is how licenses end up rejected as
+     * malformed when the signature is perfectly valid.
+     */
+    private static final String REAL_BOT_MESSAGE =
+            "✅ لایسنس شما آماده است.\n\n"
+            + "{\"v\":1,\"sub\":\"u_d90406fcc995440b\",\"device\":\"\",\"nbf\":1790367274,"
+            + "\"exp\":1798143274,\"tier\":\"user\","
+            + "\"sig\":\"WW4YNUsY/ODcKW5kVgSgSvrXJM1d6AmIhF1D/z1gOTsxZc+tM4I6dGfOj5S1rPV8ShbJ66EvoYjPIofgoaDyDw==\"}\n\n"
+            + "این متن را در برنامه کپی کنید. اعتبار: 90 روز.";
+
+    @Test public void theWholeBotMessageVerifies() {
+        LicenseVerifier.Result r = LicenseVerifier.verify(REAL_BOT_MESSAGE, TEST_PUBLIC_KEY, NBF + 1);
+        assertEquals("pasting the entire chat message must work",
+                LicenseVerifier.Status.BAD_SIGNATURE, r.status);
+        // Same content, different key: proves the JSON was extracted and parsed
+        // rather than the message simply being rejected as unparseable.
+    }
+
+    @Test public void theWholeBotMessageVerifiesUnderItsOwnKey() {
+        // Reuse the vector's signature by swapping only the envelope text: the
+        // extractor must return exactly the JSON, byte for byte.
+        assertEquals(TEST_LICENSE, LicenseVerifier.extractJson(REAL_BOT_MESSAGE)
+                .replace("u_d90406fcc995440b", "u_testvector0001")
+                .replace("1790367274", String.valueOf(NBF))
+                .replace("1798143274", String.valueOf(EXP))
+                .replace("WW4YNUsY/ODcKW5kVgSgSvrXJM1d6AmIhF1D/z1gOTsxZc+tM4I6dGfOj5S1rPV8ShbJ66EvoYjPIofgoaDyDw==",
+                         "xc6/mlkkPvAnRslBENV7u2OzQ+4dy329s+4B+ZLm0XhCLkp8buiW3dP7CtFk03wY3LRyp6ecLI1CUpjN6wh7Aw=="));
+    }
+
+    @Test public void theBotMessageVerifiesEndToEnd() {
+        // Same trick, but through verify() rather than string equality.
+        String patched = REAL_BOT_MESSAGE
+                .replace("u_d90406fcc995440b", "u_testvector0001")
+                .replace("1790367274", String.valueOf(NBF))
+                .replace("1798143274", String.valueOf(EXP))
+                .replace("WW4YNUsY/ODcKW5kVgSgSvrXJM1d6AmIhF1D/z1gOTsxZc+tM4I6dGfOj5S1rPV8ShbJ66EvoYjPIofgoaDyDw==",
+                         "xc6/mlkkPvAnRslBENV7u2OzQ+4dy329s+4B+ZLm0XhCLkp8buiW3dP7CtFk03wY3LRyp6ecLI1CUpjN6wh7Aw==");
+        LicenseVerifier.Result r = LicenseVerifier.verify(patched, TEST_PUBLIC_KEY, NBF + 1);
+        assertEquals(LicenseVerifier.Status.VALID, r.status);
+        assertEquals("u_testvector0001", r.subject);
+    }
+
+    @Test public void extractionSurvivesAwkwardSurroundings() {
+        String lic = TEST_LICENSE;
+        String[] wrappers = {
+                lic,
+                "  " + lic + "  ",
+                lic + "\n",
+                "سلام\n" + lic,
+                lic + "\n\n✅ کپی شد",
+                "```\n" + lic + "\n```",
+                "متن: " + lic + " پایان",
+                "«" + lic + "»",
+        };
+        for (String w : wrappers) {
+            assertEquals("wrapper failed: " + w, lic, LicenseVerifier.extractJson(w));
+        }
+    }
+
+    @Test public void extractionIgnoresBracesInsideStrings() {
+        // A naive first-{ to last-} slice would swallow the trailing text here
+        // and produce something that is not valid JSON.
+        String tricky = "پیام: {\"note\":\"a { b } c\",\"n\":1} ته پیام";
+        assertEquals("{\"note\":\"a { b } c\",\"n\":1}", LicenseVerifier.extractJson(tricky));
+    }
+
+    @Test public void extractionEscapesAreNotMistakenForQuotes() {
+        String tricky = "{\"a\":\"he said \\\"hi\\\"\",\"b\":2} دنباله";
+        assertEquals("{\"a\":\"he said \\\"hi\\\"\",\"b\":2}", LicenseVerifier.extractJson(tricky));
+    }
+
+    @Test public void textWithNoObjectIsPassedThroughUnchanged() {
+        assertEquals("سلام", LicenseVerifier.extractJson("سلام"));
+        assertEquals("", LicenseVerifier.extractJson(null));
+    }
+
+    /* ── malformed input ─────────────────────────────────────────────────── */
 
     @Test public void malformedInputIsRejectedWithoutThrowing() {
         String[] junk = {
