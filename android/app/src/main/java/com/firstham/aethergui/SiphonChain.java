@@ -42,20 +42,6 @@ final class SiphonChain {
     /** How long each inner leg gets to publish its SOCKS listener. */
     private static final long INNER_LEG_TIMEOUT_MS = 45_000L;
 
-    /**
-     * The core protocol for a requested one.
-     *
-     * Only a chained session is remapped. Every other value is passed through
-     * untouched, including ones the core will reject, so that the defaulting
-     * stays the core's single documented behaviour rather than being second-
-     * guessed here.
-     */
-    static String innerLegProtocol(String requested) {
-        String value = requested == null ? "" : requested.trim().toLowerCase(java.util.Locale.US);
-        if (!"siphon".equals(value)) return requested;
-        return INNER_LADDER[0];
-    }
-
     /** The full ladder, for the retry that walks it. */
     static String[] innerLadder() {
         return INNER_LADDER.clone();

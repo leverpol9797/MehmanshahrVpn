@@ -2608,6 +2608,20 @@ public final class AetherVpnService extends VpnService {
     }
 
     /**
+     * The core protocol for a requested one.
+     *
+     * Only a chained session is remapped. Every other value is passed through
+     * untouched, including ones the core will reject, so that the defaulting
+     * stays the core's single documented behaviour rather than being second-
+     * guessed here.
+     */
+    static String innerLegProtocol(String requested) {
+        String value = requested == null ? "" : requested.trim().toLowerCase(java.util.Locale.US);
+        if (!"siphon".equals(value)) return requested;
+        return INNER_LADDER[0];
+    }
+
+    /**
      * Start Psiphon over the core's SOCKS listener and wait for its own.
      *
      * The core is already up and publishing SOCKS on 1820 by the time this runs

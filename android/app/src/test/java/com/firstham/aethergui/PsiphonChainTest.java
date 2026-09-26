@@ -40,7 +40,7 @@ public final class PsiphonChainTest {
         // "siphon" produced a MASQUE tunnel on 1820 that the outer half was
         // never going to match, and the field log showed exactly that: a masque
         // identity provisioned, a masque gateway hunt, and no SOCKS listener.
-        assertEquals("wireguard", SiphonChain.innerLegProtocol("siphon"));
+        assertEquals("wireguard", AetherVpnService.innerLegProtocol("siphon"));
     }
 
     @Test public void everyInnerLegIsOneTheCoreActuallyHas() {
@@ -57,10 +57,10 @@ public final class PsiphonChainTest {
     @Test public void nonChainedProtocolsArePassedThroughUntouched() {
         // Second-guessing the core's defaults here would give it two places to
         // decide what an unknown protocol means instead of one.
-        assertEquals("gool", SiphonChain.innerLegProtocol("gool"));
-        assertEquals("wireguard", SiphonChain.innerLegProtocol("wireguard"));
-        assertEquals("masque", SiphonChain.innerLegProtocol("masque"));
-        assertEquals("something-new", SiphonChain.innerLegProtocol("something-new"));
+        assertEquals("gool", AetherVpnService.innerLegProtocol("gool"));
+        assertEquals("wireguard", AetherVpnService.innerLegProtocol("wireguard"));
+        assertEquals("masque", AetherVpnService.innerLegProtocol("masque"));
+        assertEquals("something-new", AetherVpnService.innerLegProtocol("something-new"));
     }
 
     @Test public void theChainPortIsTheInnerLegPort() {
