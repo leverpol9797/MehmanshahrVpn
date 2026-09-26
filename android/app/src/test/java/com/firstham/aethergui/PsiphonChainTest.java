@@ -44,7 +44,7 @@ public final class PsiphonChainTest {
         assertEquals("gool", ladder[ladder.length - 1]);
     }
 
-    @Test public void theTunIsEstablishedBeforePsiphonStarts() {
+    @Test public void theTunIsEstablishedBeforePsiphonStarts() throws Exception {
         // Psiphon's NetworkMonitor reads tun0 appearing as a network change and
         // restarts the controller, so a TUN created after Psiphon starts is not
         // a race to be lost — it is a 13-second restart loop to be sat through.

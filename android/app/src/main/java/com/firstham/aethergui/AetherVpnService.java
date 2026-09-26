@@ -2751,7 +2751,15 @@ public final class AetherVpnService extends VpnService {
                         + SiphonChain.chainSocksAddress());
                 return true;
             } catch (Exception notYet) {
-                Thread.sleep(200L);
+                try {
+                    Thread.sleep(200L);
+                } catch (InterruptedException woken) {
+                    // Teardown interrupts the connect worker, and a sleep that
+                    // swallows that would keep this loop polling a tunnel that
+                    // is being torn down underneath it.
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             } finally {
                 try { probe.close(); } catch (Exception ignored) { }
             }
