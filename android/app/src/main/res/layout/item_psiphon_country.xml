@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="64dp" android:paddingLeft="18dp" android:paddingRight="18dp" android:paddingTop="10dp" android:paddingBottom="10dp" android:background="?attr/selectableItemBackground">
+
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/country_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/text" android:textSize="15sp" />
+        <TextView android:id="@+id/country_detail" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/muted" android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- A check rather than a radio button: the list is long and this is a
+         single choice, so only the current row needs to carry a mark. -->
+    <TextView android:id="@+id/country_check" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:text="&#10003;" android:textColor="@color/text" android:textSize="18sp" android:visibility="invisible" />
+</LinearLayout>

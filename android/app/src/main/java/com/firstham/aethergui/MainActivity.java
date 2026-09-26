@@ -238,6 +238,15 @@ public final class MainActivity extends AppCompatActivity {
         showPage(id == R.id.nav_configurations ? "configurations" : id == R.id.nav_settings ? "settings" : id == R.id.nav_about ? "about" : "connect");
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        // The country picker is a separate screen, so the button's label is one
+        // intent behind by the time this comes back.
+        if (binding != null && binding.psiphonCountryButton != null) {
+            binding.psiphonCountryButton.setText(PsiphonRegions.preferredLabel(this));
+        }
+    }
+
     private void showPage(String destination) {
         page = destination;
         binding.homePage.setVisibility("connect".equals(page) ? View.VISIBLE : View.GONE);
@@ -266,6 +275,17 @@ public final class MainActivity extends AppCompatActivity {
         binding.advancedToggle.setOnClickListener(v -> { boolean show = binding.advancedContainer.getVisibility() != View.VISIBLE; binding.advancedContainer.setVisibility(show ? View.VISIBLE : View.GONE); binding.advancedToggle.setText(show ? R.string.hide_advanced : R.string.show_advanced); });
         binding.resetButton.setOnClickListener(v -> resetDefaults());
         binding.checkUpdatesButton.setOnClickListener(v -> checkForUpdates());
+        // Psiphon's exit country and CDN fronting. The button shows the current
+        // choice inline rather than opening on a row that has to be found, since
+        // "automatic" is the default and the user is confirming a setting
+        // rather than hunting through a menu.
+        binding.psiphonCountryButton.setText(PsiphonRegions.preferredLabel(this));
+        binding.psiphonCountryButton.setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, PsiphonCountryActivity.class)));
+        binding.psiphonCdnSwitch.setChecked(
+                preferences.getBoolean("psiphonCdnFronting", false));
+        binding.psiphonCdnSwitch.setOnCheckedChangeListener((button, checked) ->
+                preferences.edit().putBoolean("psiphonCdnFronting", checked).apply());
         // gool was throwing away a tunnel that had already validated end to end
         // because its exit was in Iran, restarting three times and ending with
         // no connection. Whether an Iranian exit is acceptable is the user's

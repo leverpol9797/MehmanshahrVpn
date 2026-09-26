@@ -276,4 +276,19 @@
     <string name="log_empty">Nothing recorded yet. Connect once, then come back.</string>
     <string name="accept_iran_exit">Accept an Iran exit</string>
     <string name="accept_iran_exit_summary">On, a connection whose exit is in Iran is accepted. Off, the app retries until it finds an exit abroad — which is sometimes slow and sometimes not available at all.</string>
-</resources>
+    <string name="psiphon_title">Psiphon over WireGuard</string>
+    <string name="psiphon_title_summary">WireGuard connects first, then Psiphon rides on top of it. The exit IP is Psiphon\'s.</string>
+    <string name="psiphon_country">Exit country</string>
+    <string name="psiphon_country_summary">The country Psiphon tries first. If it will not connect, every country is tried.</string>
+    <string name="psiphon_auto">Automatic — let Psiphon choose</string>
+    <string name="psiphon_cdn_fronting">CDN fronting</string>
+    <string name="psiphon_cdn_fronting_summary">Hides Psiphon\'s traffic inside ordinary HTTPS to a large CDN. Needed on heavily censored operators.</string>
+    <string name="psiphon_choose_country">Choose an exit country</string>
+    <string name="psiphon_clear_country">Clear — let Psiphon choose</string>
+    <string name="psiphon_servers_bundled">%s servers in the list</string>
+    <string name="psiphon_servers_bundled_one">1 server in the list</string>
+    <string name="psiphon_regions_reported">Reported available by Psiphon</string>
+    <string name="service_psiphon_connecting">Connecting to Psiphon…</string>
+    <string name="service_psiphon_connected">Psiphon connected</string>
+    <string name="service_psiphon_timeout">Psiphon did not come up in time</string>
+  </resources>

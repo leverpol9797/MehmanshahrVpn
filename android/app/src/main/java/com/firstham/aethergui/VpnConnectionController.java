@@ -8,7 +8,7 @@ import android.os.SystemClock;
 import androidx.core.content.ContextCompat;
 
 final class VpnConnectionController {
-    private static final String[] PROTOCOLS = {"masque", "wg", "gool", "smart"};
+    private static final String[] PROTOCOLS = {"masque", "wg", "gool", "smart", "siphon"};
     private static final String[] SCANS = {"balanced", "turbo", "thorough", "stealth", "ironclad"};
     private static final String[] IP_MODES = {"v4", "v6", "both"};
     private static final String[] OBFUSCATION = {"firewall", "gfw", "balanced", "aggressive", "off"};
@@ -69,7 +69,15 @@ final class VpnConnectionController {
     static String normalizedMode(String mode) { return "manual".equals(mode) ? "manual" : "vpn"; }
 
     static int normalizedProtocolIndex(String mode, int protocolIndex) {
-        return "smart".equals(mode) ? PROTOCOLS.length - 1 : protocolIndex;
+        // Not PROTOCOLS.length - 1. That worked while smart was last, and
+        // silently pointed every legacy mode=smart connection at whatever was
+        // appended next the moment a protocol was added — which is how a user
+        // who had never heard of Psiphon ended up on it.
+        if (!"smart".equals(mode)) return protocolIndex;
+        for (int i = 0; i < PROTOCOLS.length; i++) {
+            if ("smart".equals(PROTOCOLS[i])) return i;
+        }
+        return protocolIndex;
     }
 
     private static String value(String[] values, int index, String fallback) {

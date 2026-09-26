@@ -11,6 +11,12 @@ dependencies {
     // algorithm we need correctly. The app only ever verifies — it never signs.
     implementation 'net.i2p.crypto:eddsa:0.3.0'
 
+    // The Psiphon tunnel core, as a vendored AAR built from the Shirokhorshid
+    // fork — see .github/workflows/build-psiphon-aar.yml for why the stock
+    // build cannot be used. fileTree rather than a direct file() so the build
+    // still resolves on a tree that has not vendored the AAR yet.
+    implementation fileTree(dir: 'libs', include: ['*.aar'])
+
     testImplementation 'junit:junit:4.13.2'
     // org.json is stubbed inside android.jar, so JVM unit tests need the real one
     testImplementation 'org.json:json:20231013'
@@ -34,8 +40,8 @@ android {
         applicationId 'com.mehmanshahr.vpn'
         minSdk 26
         targetSdk 35
-        versionCode 30
-        versionName '2.4.4'
+        versionCode 31
+        versionName '2.4.5'
     }
 
     signingConfigs {

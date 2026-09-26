@@ -75,6 +75,15 @@ public final class AetherVpnService extends VpnService {
     private static final int NOTIFICATION_ID = 1819;
     private static final int ALERT_NOTIFICATION_ID = 1820;
     private static final int SOCKS_TIMEOUT_MS = 60_000;
+    /**
+     * How long the whole chain gets to come up.
+     *
+     * Longer than SOCKS_TIMEOUT_MS on purpose: that budget is for the core
+     * alone, and Psiphon then has to scan servers and negotiate a session
+     * through it. Measured against a one-leg connect, the chain is roughly
+     * double the work before anything is listening.
+     */
+    private static final long PSIPHON_TIMEOUT_MS = 120_000L;
     private static final int SMART_PROTOCOL_TIMEOUT_MS = 18_000;
     private static final double SMART_EARLY_ACCEPT_SCORE = 96.0;
     private static final int MASQUE_H3_PRIMARY_TIMEOUT_MS = 20_000;
@@ -219,6 +228,9 @@ public final class AetherVpnService extends VpnService {
     private final Object runtimeLock = new Object();
     private final Object networkLock = new Object();
     private final Object logLock = new Object();
+    /** The WARP-then-Psiphon chain, or null when another protocol is in use. */
+    private SiphonChain siphonChain;
+
     private final StringBuilder logHistory = new StringBuilder();
     private final StringBuilder pendingLogs = new StringBuilder();
     private volatile Process aetherProcess;
@@ -569,6 +581,14 @@ public final class AetherVpnService extends VpnService {
         }
         if (!isCurrentSession(request, session)) return false;
         sendLog("Performance core_and_socks_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+
+        // The chain has a second leg. The core started above is only the inner
+        // one — it publishes SOCKS for Psiphon to dial through rather than
+        // carrying device traffic — so the bridge must not attach to it.
+        if ("siphon".equals(selectedProtocol)) {
+            if (!startSiphonChain(request, session)) return false;
+            sendLog("Performance psiphon_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+        }
 
         if ("automatic".equals(VpnConnectionController.normalizedMtuMode(value(request, "mtuMode", "manual")))) {
             long mtuStarted = SystemClock.elapsedRealtime();
@@ -1312,10 +1332,19 @@ public final class AetherVpnService extends VpnService {
         env.put("AETHER_NOIZE", value(request, "obfuscation", ConnectionDefaults.OBFUSCATION));
         // Keep core diagnostics enabled internally; there is no user-facing log-level control.
         env.put("AETHER_LOG_LEVEL", "info");
-        env.put("AETHER_SOCKS", value(request, "socks", "127.0.0.1:1819"));
+        String protocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
+        // The chain's inner leg listens on 1820, not the usual 1819: 1819 is
+        // Psiphon's own SOCKS listener on that path, and two things cannot share
+        // a port. The SOCKS extra the caller passed is ignored for siphon
+        // because the inner leg's port is not a user choice — Psiphon's
+        // UpstreamProxyURL is hard-coded to it, so a different number would
+        // break the chain rather than move it.
+        boolean chained = "siphon".equals(protocol);
+        env.put("AETHER_SOCKS", chained
+                ? SiphonChain.chainSocksAddress()
+                : value(request, "socks", "127.0.0.1:1819"));
         env.put("AETHER_CONFIG", new File(getFilesDir(), "aether.toml").getAbsolutePath());
         env.put("AETHER_QUICK_RECONNECT", request.getBooleanExtra("quickReconnect", true) ? "1" : "0");
-        String protocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
         String transport = value(request, "transport", ConnectionDefaults.TRANSPORT);
         // One WARP identity per transport, so switching modes does not move the
         // identity underneath a live tunnel.
@@ -2447,6 +2476,13 @@ public final class AetherVpnService extends VpnService {
             bridgeStarted = false;
         }
         // Deliberately outside runtimeLock: see stopBridge().
+        // Psiphon's Go controller is not a child process, so nothing reaps it
+        // for us: leaving it running holds the SOCKS port and makes the next
+        // connect fail against a tunnel nobody is listening on.
+        if (siphonChain != null) {
+            siphonChain.stop();
+            siphonChain = null;
+        }
         if (bridgeUp) stopBridge();
         synchronized (runtimeLock) {
             try { if (vpnInterface != null) vpnInterface.close(); }
@@ -2566,7 +2602,81 @@ public final class AetherVpnService extends VpnService {
         return new File(getFilesDir(), name).getAbsolutePath();
     }
 
-    private void sendLog(String line) {
+    /**
+     * Start Psiphon over the core's SOCKS listener and wait for its own.
+     *
+     * The core is already up and publishing SOCKS on 1820 by the time this runs
+     * — that is the inner leg. What is missing is the outer one, and until
+     * Psiphon reports a listening port there is nothing for the hev bridge to
+     * attach to, so this blocks on that rather than returning early.
+     *
+     * @return true when Psiphon is ready to carry traffic
+     */
+    private boolean startSiphonChain(Intent request, long session) throws Exception {
+        if (siphonChain != null) siphonChain.stop();
+        siphonChain = new SiphonChain(this, new PsiphonTunnelRunner.Listener() {
+            @Override public void onPsiphonReady(int port) {
+                sendLog("Psiphon SOCKS listening on 127.0.0.1:" + port);
+            }
+            @Override public void onPsiphonConnecting() {
+                updateState("scanning", getString(R.string.service_psiphon_connecting));
+            }
+            @Override public void onPsiphonConnected() {
+                if (isCurrentSession(request, session)) {
+                    updateState("securing", getString(R.string.service_psiphon_connected));
+                }
+            }
+            @Override public void onPsiphonExiting(String reason) {
+                sendLog("Psiphon chain stopped: " + reason);
+            }
+            @Override public void onPsiphonLog(String line) { }
+            @Override public void onPsiphonRegions(java.util.List<String> regions) { }
+        });
+        String country = PsiphonRegions.preferred(this);
+        siphonChain.setCountry(country);
+        siphonChain.setCdnFronting(getSharedPreferences("aether", MODE_PRIVATE)
+                .getBoolean("psiphonCdnFronting", false));
+        sendLog("Starting Psiphon over " + SiphonChain.chainSocksAddress()
+                + (country == null ? "" : " in " + PsiphonRegions.name(country)));
+
+        String entries = embeddedServerEntries();
+        siphonChain.start(entries);
+        long deadline = SystemClock.elapsedRealtime() + PSIPHON_TIMEOUT_MS;
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (!isCurrentSession(request, session)) return false;
+            if (siphonChain.readyPort() > 0) return true;
+            // A chosen country that will not come up is worth one retry without
+            // the filter, not an outright failure.
+            if (siphonChain.countryAttemptExpired()
+                    && siphonChain.retryWithoutCountry(entries)) continue;
+            Thread.sleep(250L);
+        }
+        siphonChain.stop();
+        throw new IllegalStateException(getString(R.string.service_psiphon_timeout));
+    }
+
+    /** The hex-encoded embedded server list, or empty when none is bundled. */
+    private String embeddedServerEntries() {
+        java.io.InputStream in = null;
+        try {
+            in = getAssets().open("server_entries.txt");
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+            return new String(out.toByteArray(), java.nio.charset.Charset.forName("UTF-8")).trim();
+        } catch (Exception error) {
+            sendLog("No embedded server_entries.txt: " + safeMessage(error));
+            return "";
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (Exception ignored) { }
+            }
+        }
+    }
+
+    /** Package-private so the Siphon chain can report through the same log. */
+    void sendLog(String line) {
         if (line == null || line.trim().isEmpty()) return;
         Log.i(TAG, line);
         synchronized (logLock) {
