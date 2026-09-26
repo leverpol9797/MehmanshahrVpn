@@ -1719,6 +1719,7 @@ public final class AetherVpnService extends VpnService {
     }
 
     private GoolExit selectAcceptedGoolExit(Intent request, long session) throws Exception {
+        String protocol = "gool";
         for (int retry = 0; retry <= MAX_GOOL_IRAN_RETRIES; retry++) {
             if (!isCurrentSession(request, session)) return null;
             GoolExit exit;
