@@ -2739,13 +2739,21 @@ public final class AetherVpnService extends VpnService {
                 "127.0.0.1", SiphonChain.CHAIN_PORT);
         while (SystemClock.elapsedRealtime() < deadline) {
             if (!isCurrentSession(activeRequest, session)) return false;
-            try (java.net.Socket probe = new java.net.Socket()) {
+            // A plain try rather than try-with-resources: the probe socket is
+            // closed in the finally because the success path returns from
+            // inside the try, and this loop runs for five seconds on a leg that
+            // is not coming up, so leaking one descriptor per attempt would add
+            // up.
+            java.net.Socket probe = new java.net.Socket();
+            try {
                 probe.connect(address, 500);
                 sendLog("Chain: WARP leg is serving SOCKS on "
                         + SiphonChain.chainSocksAddress());
                 return true;
-            } catch (Exception retry) {
+            } catch (Exception notYet) {
                 Thread.sleep(200L);
+            } finally {
+                try { probe.close(); } catch (Exception ignored) { }
             }
         }
         return false;
