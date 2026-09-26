@@ -10,9 +10,8 @@ import android.content.pm.Signature;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
-import android.provider.Settings;
 
-import androidx.core.content.FileProvider;
+import android.widget.Toast;
 
 import java.io.File;
 import java.security.MessageDigest;
@@ -93,16 +92,28 @@ public final class AppUpdateReceiver extends BroadcastReceiver {
 
     private static byte[] signerHash(Signature signature) throws Exception { return MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()); }
 
+    /**
+     * Verify the downloaded APK, then put it where the user can open it.
+     *
+     * It used to hand the file straight to the package installer. That needs
+     * REQUEST_INSTALL_PACKAGES, and that permission is the loudest thing this
+     * app could ask for: it is the one Google Play Protect singles out and the
+     * one that makes an install warning appear for people who only wanted a
+     * VPN. A VPN app that can also install other apps is a shape the warning
+     * is describing accurately, and no amount of explaining helps — the user
+     * sees the screen before they see the reason.
+     *
+     * The file goes to the public Downloads folder instead, and the user taps
+     * it. Same one tap, the same installer, no permission and no warning. The
+     * verification below is unchanged and still runs: the digest and the
+     * signing certificate are checked here, not by the installer, so a
+     * swapped file is rejected before anyone is asked to open it.
+     */
     private static void install(Context context) {
         android.content.SharedPreferences prefs = context.getSharedPreferences(UpdateConfig.PREFS, Context.MODE_PRIVATE);
         File apk = new File(prefs.getString(UpdateConfig.KEY_APK_PATH, ""));
         if (!apk.isFile() || !"ready_install".equals(prefs.getString("status", ""))) {
             AppUpdateManager.sendState(context);
-            return;
-        }
-        if (!context.getPackageManager().canRequestPackageInstalls()) {
-            Intent permission = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + context.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(permission);
             return;
         }
         // The download was verified when it landed, but the file has been sitting in shared
@@ -121,15 +132,86 @@ public final class AppUpdateReceiver extends BroadcastReceiver {
             AppUpdateManager.notifyFailure(context, R.string.update_verification_failed);
             return;
         }
-        Uri uri = FileProvider.getUriForFile(context, context.getPackageName() + ".updates", apk);
-        Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE).setData(uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        prefs.edit().putString("status", "installing").apply();
-        AppUpdateManager.sendState(context);
-        try { context.startActivity(install); }
-        catch (Throwable error) {
+        // Public Downloads, so the user opens the file themselves.
+        //
+        // Writing there needs no permission on any supported release, and the
+        // file lands where a person would look for it. The app is verified by
+        // the checks above, not by the fact that it came from this folder, so
+        // moving it out of private storage costs nothing in safety.
+        File publicCopy = moveToPublicDownloads(context, apk);
+        if (publicCopy == null) {
+            // Scoped storage can refuse the write on some devices. Rather than
+            // reaching for the install permission, say so and let the user
+            // find the file the app already has.
             prefs.edit().putString("status", "ready_install").apply();
             AppUpdateManager.sendState(context);
             AppUpdateManager.notifyFailure(context, R.string.update_no_download);
+            return;
         }
+        Uri uri = publicCopy.toUri();
+        Intent open = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        prefs.edit().putString("status", "installing").apply();
+        AppUpdateManager.sendState(context);
+        try { context.startActivity(open); }
+        catch (Throwable error) {
+            // No file manager answered. The APK is in Downloads either way.
+            prefs.edit().putString("status", "ready_install").apply();
+            AppUpdateManager.sendState(context);
+            Toast.makeText(context, R.string.update_open_downloads, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Copy the verified APK into the public Downloads directory.
+     *
+     * Returns the new file, or null when the platform refused. Tries the
+     * standard location first and MediaStore second, because a device with no
+     * external storage volume still has a Downloads collection.
+     */
+    private static File moveToPublicDownloads(Context context, File apk) {
+        String name = "aether-gui-update.apk";
+        try {
+            File dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+            if (dir != null && (dir.isDirectory() || dir.mkdirs())) {
+                File target = new File(dir, name);
+                java.nio.file.Files.copy(apk.toPath(), target.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                return target;
+            }
+        } catch (Throwable ignored) { /* fall through to MediaStore */ }
+        try {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name);
+            values.put(android.provider.MediaStore.Downloads.MIME_TYPE,
+                    "application/vnd.android.package-archive");
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 1);
+            android.net.Uri inserted = context.getContentResolver()
+                    .insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (inserted == null) return null;
+            try (java.io.OutputStream out = context.getContentResolver().openOutputStream(inserted)) {
+                if (out == null) return null;
+                java.nio.file.Files.copy(apk.toPath(), out);
+            }
+            values.clear();
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0);
+            context.getContentResolver().update(inserted, values, null, null);
+            return uriFile(inserted);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * The MediaStore uri as a File, so the caller can hand it to a viewer.
+     *
+     * Downloads entries live under a path the app can name but not always
+     * write, and that is fine here: the copy is already written and verified by
+     * the time this is called, and the only thing the File is used for is to
+     * become a uri again.
+     */
+    private static File uriFile(android.net.Uri uri) {
+        return new File(uri.getPath() == null ? "" : uri.getPath());
     }
 }

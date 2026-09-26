@@ -28,7 +28,7 @@
          https://rubika.ir/BotFather · https://rubika.ir/chattino -->
     <string name="license_bot_link" translatable="false">https://rubika.ir/MehmanshahrVpnBot</string>
     <string name="license_bot_title">دریافت لایسنس از ربات روبیکا</string>
-    <string name="license_bot_step">شمارهٔ موبایل خود را برای این ربات در روبیکا بفرستید. پس از تأیید، لایسنتان همین‌جا ارسال می‌شود.</string>
+    <string name="license_bot_step">شمارهٔ موبایل خود را برای این ربات در روبیکا بفرستید. پس از تأیید، کد فعال‌سازی‌تان همین‌جا ارسال می‌شود.</string>
     <string name="license_bot_open">باز کردن روبیکا</string>
     <string name="license_bot_copy">کپی آیدی</string>
     <string name="license_bot_copied">آیدی ربات کپی شد</string>
@@ -242,6 +242,7 @@
     <string name="update_notification_channel_summary">وضعیت و نصب به‌روزرسانی MehmanshahrVPN</string>
     <string name="install_permission_required">اجازه نصب به‌روزرسانی را به MehmanshahrVPN بدهید و دوباره تلاش کنید.</string>
     <string name="update_download_started">دریافت به‌روزرسانی آغاز شد.</string>
+    <string name="update_open_downloads">فایل به‌روزرسانی در پوشهٔ Downloads ذخیره شد. آن را باز کنید تا نصب شود.</string>
     <string name="update_no_download">به‌روزرسانی تأییدشده‌ای برای نصب آماده نیست.</string>
     <string name="widget_active">MehmanshahrVPN فعال</string>
     <string name="widget_disconnected">قطع</string>
