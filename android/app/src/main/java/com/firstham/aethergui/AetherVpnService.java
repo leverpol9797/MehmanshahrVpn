@@ -2637,7 +2637,7 @@ public final class AetherVpnService extends VpnService {
     static String innerLegProtocol(String requested) {
         String value = requested == null ? "" : requested.trim().toLowerCase(java.util.Locale.US);
         if (!"siphon".equals(value)) return requested;
-        return INNER_LADDER[0];
+        return SiphonChain.innerLadder()[0];
     }
 
     /**
