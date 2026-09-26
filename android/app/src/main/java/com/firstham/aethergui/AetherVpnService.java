@@ -1558,12 +1558,17 @@ public final class AetherVpnService extends VpnService {
     }
 
     private GoolExit selectAcceptedSmartGoolExit(Intent request, long session) throws Exception {
+        String protocol = "gool";
         for (int retry = 0; retry <= MAX_GOOL_IRAN_RETRIES; retry++) {
             if (stopping || generation.get() != session) return null;
             GoolExit exit = lookupGoolExit(request);
-            if (!isIranCountry(exit.countryCode)) return exit;
+            // Same rule as selectAcceptedGoolExit: a validated tunnel with an
+            // Iranian exit is a working tunnel, and the user chooses whether
+            // that is acceptable here.
+            if (!isIranCountry(exit.countryCode) || acceptsIranExit()) return exit;
             if (retry == MAX_GOOL_IRAN_RETRIES) return null;
             rejectIranExit(retry);
+            clearGoolGatewayCache(protocol);
             stopAetherOnly();
             Thread.sleep(GOOL_IRAN_RETRY_DELAY_MS);
             if (!startAetherWithMasqueFallback(request, SMART_PROTOCOL_TIMEOUT_MS)) return null;
@@ -1726,10 +1731,23 @@ public final class AetherVpnService extends VpnService {
             }
             if (!isCurrentSession(request, session)) return null;
             if (!isIranCountry(exit.countryCode)) return exit;
+            // A tunnel that validated end to end, carries traffic, and answers
+            // a ping is a working connection. An Iranian exit makes it a poor
+            // one from inside Iran, which is a preference rather than a
+            // failure — so the user decides, and the default is to keep what
+            // works instead of discarding it three times and ending with no
+            // tunnel at all.
+            if (acceptsIranExit()) return exit;
             if (retry == MAX_GOOL_IRAN_RETRIES) {
                 throw new GoolExitException(getString(R.string.service_gool_iran_failed, MAX_GOOL_IRAN_RETRIES));
             }
             rejectIranExit(retry);
+            // The exit country follows the gateway, not the registered device.
+            // Restarting the core alone re-runs the scan and can hand back the
+            // same region, which is what the field log showed: the same gateway
+            // twice, an Iran exit twice, and three full restarts for nothing.
+            // Clearing the cached peer forces the scan to reach for another one.
+            clearGoolGatewayCache(protocol);
             stopAetherOnly();
             Thread.sleep(GOOL_IRAN_RETRY_DELAY_MS);
             if (!isCurrentSession(request, session)) return null;
@@ -1738,6 +1756,46 @@ public final class AetherVpnService extends VpnService {
             }
         }
         return null;
+    }
+
+    /** Whether an Iranian exit is acceptable, per the user's setting. */
+    private boolean acceptsIranExit() {
+        return getSharedPreferences("aether", MODE_PRIVATE)
+                .getBoolean("acceptIranExit", true);
+    }
+
+    /**
+     * Drop the gateway the core would otherwise reuse.
+     *
+     * The core caches the endpoint that worked last time so Android, which
+     * starts a fresh process on every connect, does not pay for a full scan
+     * each time. That cache is exactly what pins the exit country, so a retry
+     * that means "get me a different country" has to remove it.
+     *
+     * The names are derived, not guessed: the core builds them with
+     * derive_sibling_path, which inserts the suffix before the extension, so
+     * aether-gool.toml + "gool-lastconn" is aether-gool-gool-lastconn.toml.
+     * Hand-writing those names is how a cache that is never cleared looks like
+     * a cache that is cleared and does not help.
+     */
+    private void clearGoolGatewayCache(String protocol) {
+        String base = new File(getFilesDir(), identityFile(protocol, "aether-wg.toml")).getName();
+        for (String suffix : new String[] { "gool-lastconn", "lastconn" }) {
+            File cached = new File(getFilesDir(), siblingName(base, suffix));
+            if (cached.isFile() && !cached.delete()) {
+                sendLog("Could not clear " + cached.getName());
+            }
+        }
+    }
+
+    /**
+     * The core's derive_sibling_path, in Java: insert the suffix before the
+     * extension of the file name, leaving the directory alone.
+     */
+    private static String siblingName(String fileName, String suffix) {
+        int dot = fileName.lastIndexOf('.');
+        if (dot <= 0) return fileName + "-" + suffix;
+        return fileName.substring(0, dot) + "-" + suffix + fileName.substring(dot);
     }
 
     private void rejectIranExit(int retry) {

@@ -274,4 +274,6 @@
     <string name="log_close">Close</string>
     <string name="log_copied">Log copied</string>
     <string name="log_empty">Nothing recorded yet. Connect once, then come back.</string>
+    <string name="accept_iran_exit">Accept an Iran exit</string>
+    <string name="accept_iran_exit_summary">On, a connection whose exit is in Iran is accepted. Off, the app retries until it finds an exit abroad — which is sometimes slow and sometimes not available at all.</string>
 </resources>

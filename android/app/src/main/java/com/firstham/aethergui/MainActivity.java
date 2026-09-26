@@ -266,6 +266,13 @@ public final class MainActivity extends AppCompatActivity {
         binding.advancedToggle.setOnClickListener(v -> { boolean show = binding.advancedContainer.getVisibility() != View.VISIBLE; binding.advancedContainer.setVisibility(show ? View.VISIBLE : View.GONE); binding.advancedToggle.setText(show ? R.string.hide_advanced : R.string.show_advanced); });
         binding.resetButton.setOnClickListener(v -> resetDefaults());
         binding.checkUpdatesButton.setOnClickListener(v -> checkForUpdates());
+        // gool was throwing away a tunnel that had already validated end to end
+        // because its exit was in Iran, restarting three times and ending with
+        // no connection. Whether an Iranian exit is acceptable is the user's
+        // call, so it is a switch rather than a hard-coded rule.
+        binding.acceptIranExitSwitch.setChecked(preferences.getBoolean("acceptIranExit", true));
+        binding.acceptIranExitSwitch.setOnCheckedChangeListener((button, checked) ->
+                preferences.edit().putBoolean("acceptIranExit", checked).apply());
         // The core's output has always been broadcast and never received. A
         // transport that will not come up is otherwise only describable as "it
         // does not work", and the fix for that is the actual error.

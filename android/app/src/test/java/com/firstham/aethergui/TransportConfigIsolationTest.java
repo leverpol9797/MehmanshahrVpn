@@ -94,4 +94,68 @@ public final class TransportConfigIsolationTest {
         // selector drifts by one and a different transport starts on connect.
         assertTrue("protocol count", strings().size() == 4);
     }
+
+    @Test public void anIranExitNoLongerEndsTheConnection() throws Exception {
+        // The field log from v2.4.3: both WARP tunnels validated end to end,
+        // SOCKS listened, traffic was ready, ping answered in 169ms — and the
+        // app then logged "Rejected gool exit country IR", restarted three
+        // times, and refused the connection. A tunnel that carries traffic is
+        // not a failed tunnel, so the user gets a switch instead of a verdict.
+        String source = service();
+        assertTrue("both gool entry points must honour the setting, not just one",
+                countCalls(source, "acceptsIranExit()") == 2);
+        assertTrue("the switch must default to accepting, or gool still never connects",
+                source.contains("getBoolean(\"acceptIranExit\", true)"));
+        assertTrue("the settings screen must offer it",
+                read("src", "main", "java", "com", "firstham", "aethergui", "MainActivity.java")
+                        .contains("acceptIranExit"));
+    }
+
+    @Test public void aCountryRetryActuallyChangesTheGateway() throws Exception {
+        // The country follows the gateway, not the registered device, so a
+        // restart alone re-runs the scan and can return the same region. The
+        // log showed the same gateway twice for three restarts.
+        assertTrue("the retry has to clear the cached peer",
+                service().contains("clearGoolGatewayCache"));
+    }
+
+    @Test public void theGatewayCacheNamesAreDerivedNotGuessed() throws Exception {
+        // derive_sibling_path inserts the suffix before the extension, so
+        // aether-gool.toml + "gool-lastconn" is aether-gool-gool-lastconn.toml.
+        // A hand-written name silently never matches, and a cache that is
+        // never cleared looks exactly like one that is.
+        String source = service();
+        assertTrue("must build the name the way the core does",
+                source.contains("siblingName"));
+        assertTrue("and use the core's own suffixes",
+                source.contains("gool-lastconn") && source.contains("\"lastconn\""));
+    }
+
+    @Test public void theAntiLeakCheckIsNotTheSameAsThePreference() throws Exception {
+        // An exit that cannot be identified is a leak risk and still ends the
+        // connection. Only a *known* Iranian exit became a choice. These two
+        // must not be conflated when the setting is relaxed.
+        String source = service();
+        assertTrue("an unidentified exit must still throw", source.contains("GoolExitException"));
+        assertTrue("and it must be a distinct message from the Iran-exhausted one",
+                source.contains("service_gool_country_unavailable")
+                        && source.contains("service_gool_iran_failed"));
+    }
+
+    /** Occurrences that are calls, excluding the declaration that follows one. */
+    private static int countCalls(String source, String call) {
+        int count = 0;
+        int at = source.indexOf(call);
+        while (at >= 0) {
+            int after = at + call.length();
+            int scan = after;
+            // Skip the space in "private boolean acceptsIranExit() {" so the
+            // declaration is not counted as a call.
+            while (scan < source.length() && source.charAt(scan) == ' ') scan++;
+            boolean declaration = scan < source.length() && source.charAt(scan) == '{';
+            if (!declaration) count++;
+            at = source.indexOf(call, after);
+        }
+        return count;
+    }
 }

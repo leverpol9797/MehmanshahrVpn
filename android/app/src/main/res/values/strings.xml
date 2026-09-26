@@ -275,4 +275,6 @@
     <string name="lan_credentials">پروتکل: SOCKS5 • کاربر %1$s • گذرواژه %2$s</string>
     <string name="copy_address">کپی نشانی</string>
     <string name="copy_port">کپی پورت</string>
+    <string name="accept_iran_exit">پذیرش خروجی ایران</string>
+    <string name="accept_iran_exit_summary">وقتن روشن است، اتصالی که خروجی‌اش ایران است پذیرفته می‌شود. خاموش کنید تا برنامه تا یافتن خروجی خارجی دوباره تلاش کند — که گاهی طول می‌کشد و گاهی نتیجه نمی‌دهد.</string>
 </resources>
