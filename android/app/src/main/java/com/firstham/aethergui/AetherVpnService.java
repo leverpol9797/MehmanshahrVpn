@@ -595,7 +595,7 @@ public final class AetherVpnService extends VpnService {
               boolean socksReady = startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS);
               ensureConnectNotTimedOut(session);
               if (!socksReady) {
-                  throw new IllegalStateException(aetherExitMessage("Aether did not open its SOCKS5 listener"))
+                  throw new IllegalStateException(aetherExitMessage("Aether did not open its SOCKS5 listener"));
               }
               if (!isCurrentSession(request, session)) return false;
               sendLog("Performance core_and_socks_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
