@@ -34,6 +34,30 @@ public final class PsiphonChainTest {
                 1820, PsiphonTunnelRunner.CHAIN_SOCKS_PORT);
     }
 
+    @Test public void theLadderStartsWithMasqueNotWireGuard() {
+        // MSN-GUARD's measured order, and putting wireguard first cost the whole
+        // budget on a protocol Iranian carriers usually block — the field log
+        // showed a MASQUE identity being provisioned only after the fallback had
+        // already been given up on. masque has its own fallback and endpoint
+        // cache, so it is the rung most likely to be carrying on a repeat.
+        String[] ladder = SiphonChain.innerLadder();
+        assertEquals("masque", ladder[0]);
+        assertEquals("gool", ladder[ladder.length - 1]);
+    }
+
+    @Test public void theTunIsEstablishedBeforePsiphonStarts() {
+        // Psiphon's NetworkMonitor reads tun0 appearing as a network change and
+        // restarts the controller, so a TUN created after Psiphon starts is not
+        // a race to be lost — it is a 13-second restart loop to be sat through.
+        // The order in the connect path is the only thing holding this, so it is
+        // pinned here rather than trusted to a comment.
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int tun = source.indexOf("if (!establishVpn(request, session)) return false;\n"
+                + "              if (!startSiphonChain(request, session)) return false;");
+        assertTrue("the TUN must be established before the chain starts", tun > 0);
+    }
+
     @Test public void siphonIsNeverHandedToTheCore() {
         // The core's Protocol::parse ends in `_ => Protocol::Masque`, so an
         // unknown string is accepted silently and becomes MASQUE. Passing

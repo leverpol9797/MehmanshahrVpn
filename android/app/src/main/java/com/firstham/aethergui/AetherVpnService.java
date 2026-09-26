@@ -574,20 +574,32 @@ public final class AetherVpnService extends VpnService {
         } else selectedProtocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
         updateState("starting", getString(R.string.service_launching));
         updateState("scanning", getString(R.string.service_scanning));
-        boolean socksReady = startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS);
-        ensureConnectNotTimedOut(session);
-        if (!socksReady) {
-            throw new IllegalStateException(aetherExitMessage("Aether did not open its SOCKS5 listener"));
-        }
-        if (!isCurrentSession(request, session)) return false;
-        sendLog("Performance core_and_socks_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+          boolean chained = "siphon".equals(selectedProtocol);
 
-        // The chain has a second leg. The core started above is only the inner
-        // one — it publishes SOCKS for Psiphon to dial through rather than
-        // carrying device traffic — so the bridge must not attach to it.
-        if ("siphon".equals(selectedProtocol)) {
-            if (!startSiphonChain(request, session)) return false;
-            sendLog("Performance psiphon_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+          if (chained) {
+              // Order is forced by Psiphon, not by taste, and getting it wrong
+              // costs a 13-second restart loop rather than an error:
+              //
+              //  1. the TUN first, before either tunnel. Psiphon's NetworkMonitor
+              //     reads tun0 appearing as a network change and restarts the Go
+              //     controller, so a TUN created after Psiphon starts tears the
+              //     tunnel down as soon as it appears.
+              //  2. the WARP leg next, and we wait for it: Psiphon validates
+              //     UpstreamProxyURL by dialling it, so starting Psiphon against a
+              //     proxy whose tunnel is not up yet fails the rung outright.
+              //  3. Psiphon last. The bridge attaches from its own onConnected(),
+              //     so device traffic only ever reaches a tunnel that is carrying.
+              if (!establishVpn(request, session)) return false;
+              if (!startSiphonChain(request, session)) return false;
+              sendLog("Performance psiphon_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+          } else {
+              boolean socksReady = startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS);
+              ensureConnectNotTimedOut(session);
+              if (!socksReady) {
+                  throw new IllegalStateException(aetherExitMessage("Aether did not open its SOCKS5 listener"))
+              }
+              if (!isCurrentSession(request, session)) return false;
+              sendLog("Performance core_and_socks_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
         }
 
         if ("automatic".equals(VpnConnectionController.normalizedMtuMode(value(request, "mtuMode", "manual")))) {
@@ -616,7 +628,12 @@ public final class AetherVpnService extends VpnService {
             updateNotification(getString(R.string.service_proxy_connected));
             publishedConnected = true;
         } else {
-            if (!establishVpn(request, session)) return false;
+            // The chained path already established the TUN before Psiphon started,
+            // because a TUN appearing afterwards restarts Psiphon. Establishing a
+            // second one here would also replace the descriptor out from under it.
+            if (!chained) {
+                if (!establishVpn(request, session)) return false;
+            }
             sendLog("Performance tun_and_routing_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
             updateState("securing", getString(R.string.service_traffic_checking));
             if (!establishProvenDataPlane(request, session, pipelineStarted)) return false;
