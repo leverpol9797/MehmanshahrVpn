@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/log_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="@color/surface">
+    <com.google.android.material.appbar.MaterialToolbar android:id="@+id/log_toolbar" android:layout_width="match_parent" android:layout_height="?attr/actionBarSize" android:background="@color/surface" android:title="@string/log_title" android:titleTextColor="@color/text" />
+    <!-- The log is the one place where a wall of text is the point, so it gets
+         to scroll and select freely rather than being elided. -->
+    <ScrollView android:id="@+id/log_scroll" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:paddingHorizontal="14dp">
+        <TextView android:id="@+id/log_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:fontFamily="monospace" android:textColor="@color/text" android:textIsSelectable="true" android:textSize="11sp" />
+    </ScrollView>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp">
+        <com.google.android.material.button.MaterialButton android:id="@+id/log_copy" style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="@string/log_copy" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/log_clear" style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="@string/log_clear" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/log_close" style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="@string/log_close" />
+    </LinearLayout>
+</LinearLayout>

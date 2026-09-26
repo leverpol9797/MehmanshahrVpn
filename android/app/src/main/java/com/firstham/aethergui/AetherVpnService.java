@@ -1317,6 +1317,20 @@ public final class AetherVpnService extends VpnService {
         env.put("AETHER_QUICK_RECONNECT", request.getBooleanExtra("quickReconnect", true) ? "1" : "0");
         String protocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
         String transport = value(request, "transport", ConnectionDefaults.TRANSPORT);
+        // One WARP identity per transport, so switching modes does not move the
+        // identity underneath a live tunnel.
+        //
+        // AETHER_CONFIG is the base path, and without a per-protocol override
+        // every transport resolves to that same file. gool is the one that
+        // suffers: it stacks an outer and an inner WARP tunnel, so the core
+        // provisions a second device into a sibling file, and the outer one is
+        // then the same registered device plain WireGuard uses. Two tunnels on
+        // one identity, and the peer's cached endpoint written for one is read
+        // back for the other. AETHER_WG_CONFIG and AETHER_MASQUE_CONFIG are the
+        // documented overrides; the sibling name the core derives from them is
+        // what makes the second identity land in its own file too.
+        env.put("AETHER_WG_CONFIG", identityFile(protocol, "aether-wg.toml"));
+        env.put("AETHER_MASQUE_CONFIG", identityFile("masque", "aether-masque.toml"));
         if ("masque".equals(protocol)) {
             env.put("AETHER_MASQUE_HTTP2", "h2".equals(transport) ? "1" : "0");
             env.put("AETHER_MASQUE_MTU", Integer.toString(effectiveMtu(request)));
@@ -2467,6 +2481,30 @@ public final class AetherVpnService extends VpnService {
             lanProxy.stop();
             if (startLanSharing(port, socks)) sendStatus(currentState, currentMessage);
         }
+    }
+
+    /**
+     * The identity file a transport should use.
+     *
+     * gool gets its own file rather than sharing WireGuard's, because the core
+     * stacks two WARP tunnels there and provisions a second device beside
+     * whichever primary it was given. Sharing one primary across both modes
+     * means one registered device serving two tunnels at once, with each mode's
+     * cached peer written where the other reads it. Everything else is mapped
+     * through the same table so a future transport cannot silently fall back to
+     * sharing.
+     */
+    private String identityFile(String protocol, String wireGuardFallback) {
+        String name;
+        if ("gool".equals(protocol) || "wiw".equals(protocol)
+                || "warp-in-warp".equals(protocol) || "warpinwarp".equals(protocol)) {
+            name = "aether-gool.toml";
+        } else if ("masque".equals(protocol)) {
+            name = "aether-masque.toml";
+        } else {
+            name = wireGuardFallback;
+        }
+        return new File(getFilesDir(), name).getAbsolutePath();
     }
 
     private void sendLog(String line) {

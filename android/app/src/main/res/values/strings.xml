@@ -242,6 +242,12 @@
     <string name="update_notification_channel_summary">وضعیت و نصب به‌روزرسانی MehmanshahrVPN</string>
     <string name="install_permission_required">اجازه نصب به‌روزرسانی را به MehmanshahrVPN بدهید و دوباره تلاش کنید.</string>
     <string name="update_download_started">دریافت به‌روزرسانی آغاز شد.</string>
+    <string name="log_title">گزارش اتصال</string>
+    <string name="log_copy">کپی گزارش</string>
+    <string name="log_clear">پاک کردن</string>
+    <string name="log_close">بستن</string>
+    <string name="log_copied">گزارش کپی شد</string>
+    <string name="log_empty">هنوز چیزی ثبت نشده. یک‌بار اتصال را بزنید و برگردید.</string>
     <string name="update_open_downloads">فایل به‌روزرسانی در پوشهٔ Downloads ذخیره شد. آن را باز کنید تا نصب شود.</string>
     <string name="update_no_download">به‌روزرسانی تأییدشده‌ای برای نصب آماده نیست.</string>
     <string name="widget_active">MehmanshahrVPN فعال</string>

@@ -215,6 +215,7 @@
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="@string/about_aethon_credit" android:textColor="@color/muted" android:textSize="12sp" />
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:text="@string/aether_credit" android:textColor="@color/muted" android:textSize="12sp" />
                     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:text="@string/aether_core_version" android:textColor="@color/muted" android:textDirection="ltr" android:textSize="12sp" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/about_log_button" style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginTop="10dp" android:text="@string/log_title" />
                 </LinearLayout>
             </androidx.core.widget.NestedScrollView>
 

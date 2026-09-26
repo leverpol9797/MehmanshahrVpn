@@ -30,6 +30,7 @@
     </intent-filter>
     </activity>
     <activity android:name=".MainActivity" android:exported="false" />
+    <activity android:name=".LogActivity" android:exported="false" />
     <activity
     android:name=".AppSelectionActivity"
     android:exported="false"

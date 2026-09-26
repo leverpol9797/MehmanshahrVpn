@@ -266,6 +266,11 @@ public final class MainActivity extends AppCompatActivity {
         binding.advancedToggle.setOnClickListener(v -> { boolean show = binding.advancedContainer.getVisibility() != View.VISIBLE; binding.advancedContainer.setVisibility(show ? View.VISIBLE : View.GONE); binding.advancedToggle.setText(show ? R.string.hide_advanced : R.string.show_advanced); });
         binding.resetButton.setOnClickListener(v -> resetDefaults());
         binding.checkUpdatesButton.setOnClickListener(v -> checkForUpdates());
+        // The core's output has always been broadcast and never received. A
+        // transport that will not come up is otherwise only describable as "it
+        // does not work", and the fix for that is the actual error.
+        binding.aboutLogButton.setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, LogActivity.class)));
         binding.downloadUpdateButton.setOnClickListener(v -> { String status = getSharedPreferences(UpdateConfig.PREFS, MODE_PRIVATE).getString("status", ""); if ("ready_install".equals(status)) sendBroadcast(new Intent(this, AppUpdateReceiver.class).setAction(UpdateConfig.ACTION_INSTALL)); else Toast.makeText(this, AppUpdateManager.startDownload(this, false) ? R.string.update_download_started : R.string.update_download_failed, Toast.LENGTH_SHORT).show(); });
         binding.autoDownloadSwitch.setOnCheckedChangeListener((button, checked) -> { getSharedPreferences(UpdateConfig.PREFS, MODE_PRIVATE).edit().putBoolean(UpdateConfig.KEY_AUTO_DOWNLOAD, checked).apply(); AppUpdateManager.setAutomaticChecks(this, checked); if (checked) checkForUpdates(); });
         binding.autoConnectSwitch.setOnCheckedChangeListener((button, checked) -> preferences.edit().putBoolean("autoConnectAtStart", checked).apply());
