@@ -25,28 +25,23 @@ final class SiphonChain {
     /**
      * The WARP transports tried in order until one carries Psiphon.
      *
-     * This is MSN-GUARD's order, and the reasoning behind it is measured rather
-     * than aesthetic. The core parses only "masque", "wireguard" and "gool" and
-     * sends every other string to masque without a word, so a chained session
-     * has to pick a real inner leg — and which one a carrier allows is a
-     * property of the carrier, not of the user.
+     * WireGuard leads because that is the leg this setting names: the chain is
+     * "Psiphon over WARP", and on a network that carries WireGuard the first
+     * rung connects on its first try with nothing else spent.
      *
-     *  - masque leads: it carries two transports of its own (HTTP/3 over UDP/443,
-     *    then HTTP/2 over TCP/443 with TLS fragmentation) plus a gateway cache
-     *    and a last-known-good endpoint, so a repeat connect is fast.
-     *  - wireguard next: blocked outright on some carriers — Hamrah-e-Aval has
-     *    never carried it — but immediate on others.
-     *  - gool last: it is WARP-on-WARP, so it stacks two tunnels under Psiphon
-     *    for three in total. Slowest rung, and the one that works when the
-     *    single-layer transports are shut.
+     * The rest are there because which transport a carrier allows is a property
+     * of the carrier, not of the user. A blocked WireGuard is normal on Iranian
+     * SIMs, and a setting that then simply failed would be the wrong answer for
+     * them, so masque comes next — it has transports of its own and an endpoint
+     * cache, so a repeat connect is fast. gool is last: it is WARP-on-WARP, so
+     * it stacks two tunnels under Psiphon for three in total, and is only worth
+     * reaching when the single-layer transports are shut.
      *
-     * A leading wireguard rung was tried here on the reasoning that the setting
-     * is named after it. On an Iranian carrier that ordering spent its whole
-     * budget on a protocol that is usually blocked, and the field log showed the
-     * result: a MASQUE identity provisioned after the fallback, with no SOCKS
-     * listener before the attempt expired.
+     * The core parses only "masque", "wireguard" and "gool" and sends every other
+     * string to masque without a word, so a chained session has to name a real
+     * inner leg. Every rung here is one the core knows.
      */
-    private static final String[] INNER_LADDER = { "masque", "wireguard", "gool" };
+    private static final String[] INNER_LADDER = { "wireguard", "masque", "gool" };
 
     /** How long each inner leg gets to publish its SOCKS listener. */
     private static final long INNER_LEG_TIMEOUT_MS = 45_000L;

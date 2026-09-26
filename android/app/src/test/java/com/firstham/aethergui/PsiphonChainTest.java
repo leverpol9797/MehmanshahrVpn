@@ -34,14 +34,13 @@ public final class PsiphonChainTest {
                 1820, PsiphonTunnelRunner.CHAIN_SOCKS_PORT);
     }
 
-    @Test public void theLadderStartsWithMasqueNotWireGuard() {
-        // MSN-GUARD's measured order, and putting wireguard first cost the whole
-        // budget on a protocol Iranian carriers usually block — the field log
-        // showed a MASQUE identity being provisioned only after the fallback had
-        // already been given up on. masque has its own fallback and endpoint
-        // cache, so it is the rung most likely to be carrying on a repeat.
+    @Test public void theLadderLeadsWithWireGuard() {
+        // The setting is "Psiphon over WARP": on a network carrying WireGuard
+        // the first rung connects on its first try with nothing else spent. The
+        // rungs behind it are for the carriers that block it, not a preference
+        // against it.
         String[] ladder = SiphonChain.innerLadder();
-        assertEquals("masque", ladder[0]);
+        assertEquals("wireguard", ladder[0]);
         assertEquals("gool", ladder[ladder.length - 1]);
     }
 
