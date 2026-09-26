@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-files-path name="updates" path="Download/" />
+    <!-- The public Downloads folder, used by the updater on Android 9 and
+         earlier. Scoped storage closes the direct write on Android 10, and from
+         there the file goes through MediaStore instead, so this entry only
+         serves the releases where the app can still write there itself. It is
+         scoped to Download/ rather than the whole external volume. -->
+    <external-path name="public_downloads" path="Download/" />
 </paths>

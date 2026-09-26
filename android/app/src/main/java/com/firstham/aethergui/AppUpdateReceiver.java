@@ -10,8 +10,12 @@ import android.content.pm.Signature;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 
 import android.widget.Toast;
+
+import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.security.MessageDigest;
@@ -21,6 +25,8 @@ import java.util.concurrent.Executors;
 
 public final class AppUpdateReceiver extends BroadcastReceiver {
     private static final ExecutorService VERIFY_EXECUTOR = Executors.newSingleThreadExecutor();
+    private static final String APK_MIME = "application/vnd.android.package-archive";
+    private static final String UPDATE_FILE_NAME = "aether-gui-update.apk";
 
     @Override public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
@@ -138,20 +144,25 @@ public final class AppUpdateReceiver extends BroadcastReceiver {
         // file lands where a person would look for it. The app is verified by
         // the checks above, not by the fact that it came from this folder, so
         // moving it out of private storage costs nothing in safety.
-        File publicCopy = moveToPublicDownloads(context, apk);
-        if (publicCopy == null) {
-            // Scoped storage can refuse the write on some devices. Rather than
-            // reaching for the install permission, say so and let the user
-            // find the file the app already has.
+        // Publish the verified APK where the user can open it themselves.
+        //
+        // The install permission is gone, so the last step is now the user's
+        // tap. Both paths below hand the installer a content:// uri rather
+        // than a file:// one, because a file:// uri pointed at another app is
+        // refused outright since Android 7 — the tap would fail for a reason
+        // that has nothing to do with the update.
+        Uri published = publishVerifiedApk(context, apk);
+        if (published == null) {
+            // Scoped storage can refuse the write. Say so, rather than reaching
+            // for the install permission again.
             prefs.edit().putString("status", "ready_install").apply();
             AppUpdateManager.sendState(context);
             AppUpdateManager.notifyFailure(context, R.string.update_no_download);
             return;
         }
-        Uri uri = publicCopy.toUri();
         Intent open = new Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                .setDataAndType(published, APK_MIME)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
         prefs.edit().putString("status", "installing").apply();
         AppUpdateManager.sendState(context);
         try { context.startActivity(open); }
@@ -164,54 +175,59 @@ public final class AppUpdateReceiver extends BroadcastReceiver {
     }
 
     /**
-     * Copy the verified APK into the public Downloads directory.
+     * Put the verified APK in the public Downloads folder and return a uri
+     * another app is allowed to read.
      *
-     * Returns the new file, or null when the platform refused. Tries the
-     * standard location first and MediaStore second, because a device with no
-     * external storage volume still has a Downloads collection.
+     * Two eras, two mechanisms. Before Android 10 the app may write to shared
+     * storage directly, and the FileProvider turns that file into a content
+     * uri. From Android 10 on, scoped storage forbids the direct write, so the
+     * file goes through MediaStore — which is also what keeps this working on a
+     * device with no external volume, because Downloads is a collection there
+     * rather than a directory.
+     *
+     * Returns null when the platform refused both.
      */
-    private static File moveToPublicDownloads(Context context, File apk) {
-        String name = "aether-gui-update.apk";
+    private static Uri publishVerifiedApk(Context context, File apk) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return publishViaMediaStore(context, apk);
         try {
-            File dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
-            if (dir != null && (dir.isDirectory() || dir.mkdirs())) {
-                File target = new File(dir, name);
-                java.nio.file.Files.copy(apk.toPath(), target.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                return target;
-            }
-        } catch (Throwable ignored) { /* fall through to MediaStore */ }
-        try {
-            android.content.ContentValues values = new android.content.ContentValues();
-            values.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name);
-            values.put(android.provider.MediaStore.Downloads.MIME_TYPE,
-                    "application/vnd.android.package-archive");
-            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 1);
-            android.net.Uri inserted = context.getContentResolver()
-                    .insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-            if (inserted == null) return null;
-            try (java.io.OutputStream out = context.getContentResolver().openOutputStream(inserted)) {
-                if (out == null) return null;
-                java.nio.file.Files.copy(apk.toPath(), out);
-            }
-            values.clear();
-            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0);
-            context.getContentResolver().update(inserted, values, null, null);
-            return uriFile(inserted);
+            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            if (dir == null || !(dir.isDirectory() || dir.mkdirs())) return null;
+            File target = new File(dir, UPDATE_FILE_NAME);
+            java.nio.file.Files.copy(apk.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return FileProvider.getUriForFile(context, context.getPackageName() + ".updates", target);
         } catch (Throwable ignored) {
             return null;
         }
     }
 
     /**
-     * The MediaStore uri as a File, so the caller can hand it to a viewer.
+     * Android 10 and later.
      *
-     * Downloads entries live under a path the app can name but not always
-     * write, and that is fine here: the copy is already written and verified by
-     * the time this is called, and the only thing the File is used for is to
-     * become a uri again.
+     * IS_PENDING keeps the entry invisible until the copy is complete, so a
+     * download cut short cannot appear in Downloads as a file that will not
+     * open. If the copy does fail, the half-written row is deleted rather than
+     * left with the pending flag still set.
      */
-    private static File uriFile(android.net.Uri uri) {
-        return new File(uri.getPath() == null ? "" : uri.getPath());
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    private static Uri publishViaMediaStore(Context context, File apk) {
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put(MediaStore.Downloads.DISPLAY_NAME, UPDATE_FILE_NAME);
+        values.put(MediaStore.Downloads.MIME_TYPE, APK_MIME);
+        values.put(MediaStore.Downloads.IS_PENDING, 1);
+        Uri inserted = context.getContentResolver()
+                .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+        if (inserted == null) return null;
+        try (java.io.OutputStream out = context.getContentResolver().openOutputStream(inserted)) {
+            if (out == null) { context.getContentResolver().delete(inserted, null, null); return null; }
+            java.nio.file.Files.copy(apk.toPath(), out);
+        } catch (Throwable error) {
+            context.getContentResolver().delete(inserted, null, null);
+            return null;
+        }
+        values.clear();
+        values.put(MediaStore.Downloads.IS_PENDING, 0);
+        context.getContentResolver().update(inserted, values, null, null);
+        return inserted;
     }
 }
