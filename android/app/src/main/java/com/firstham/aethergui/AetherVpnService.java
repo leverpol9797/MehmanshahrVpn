@@ -575,6 +575,7 @@ public final class AetherVpnService extends VpnService {
         updateState("starting", getString(R.string.service_launching));
         updateState("scanning", getString(R.string.service_scanning));
 
+          boolean chained = "siphon".equals(selectedProtocol);  // a chained session shapes the whole order below  // set before the loop: a chained session shapes the order below
           if (chained) {
               // Order is forced by Psiphon, not by taste, and getting it wrong
               // costs a 13-second restart loop rather than an error:
@@ -630,7 +631,6 @@ public final class AetherVpnService extends VpnService {
             // The chained path already established the TUN before Psiphon started,
             // because a TUN appearing afterwards restarts Psiphon. Establishing a
             // second one here would also replace the descriptor out from under it.
-        boolean chained = "siphon".equals(selectedProtocol);  // a chained session shapes the whole order below  // set before the loop: a chained session shapes the order below
 
             if (!chained) {
                 if (!establishVpn(request, session)) return false;
