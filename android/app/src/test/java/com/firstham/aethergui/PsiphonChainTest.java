@@ -34,6 +34,39 @@ public final class PsiphonChainTest {
                 1820, PsiphonTunnelRunner.CHAIN_SOCKS_PORT);
     }
 
+    @Test public void siphonIsNeverHandedToTheCore() {
+        // The core's Protocol::parse ends in `_ => Protocol::Masque`, so an
+        // unknown string is accepted silently and becomes MASQUE. Passing
+        // "siphon" produced a MASQUE tunnel on 1820 that the outer half was
+        // never going to match, and the field log showed exactly that: a masque
+        // identity provisioned, a masque gateway hunt, and no SOCKS listener.
+        assertEquals("wireguard", SiphonChain.innerLegProtocol("siphon"));
+    }
+
+    @Test public void everyInnerLegIsOneTheCoreActuallyHas() {
+        // The ladder is walked until a leg publishes a listener, so a rung the
+        // core does not know is not a fallback — it is a silent MASQUE retry.
+        String[] ladder = SiphonChain.innerLadder();
+        assertTrue("the ladder must not be empty", ladder.length > 0);
+        for (String rung : ladder) {
+            assertTrue("the core does not know \"" + rung + "\"",
+                    "wireguard".equals(rung) || "masque".equals(rung) || "gool".equals(rung));
+        }
+    }
+
+    @Test public void nonChainedProtocolsArePassedThroughUntouched() {
+        // Second-guessing the core's defaults here would give it two places to
+        // decide what an unknown protocol means instead of one.
+        assertEquals("gool", SiphonChain.innerLegProtocol("gool"));
+        assertEquals("wireguard", SiphonChain.innerLegProtocol("wireguard"));
+        assertEquals("masque", SiphonChain.innerLegProtocol("masque"));
+        assertEquals("something-new", SiphonChain.innerLegProtocol("something-new"));
+    }
+
+    @Test public void theChainPortIsTheInnerLegPort() {
+        assertEquals(PsiphonTunnelRunner.CHAIN_SOCKS_PORT, SiphonChain.CHAIN_PORT);
+    }
+
     @Test public void theChainIsActuallyAChain() {
         String config = PsiphonTunnelRunner.configJson("DE", false);
         assertTrue("without UpstreamProxyURL Psiphon dials the internet directly "

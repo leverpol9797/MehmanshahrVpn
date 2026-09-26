@@ -291,4 +291,5 @@
     <string name="service_psiphon_connecting">Connecting to Psiphon…</string>
     <string name="service_psiphon_connected">Psiphon connected</string>
     <string name="service_psiphon_timeout">Psiphon did not come up in time</string>
+    <string name="service_psiphon_no_inner_leg">No WARP leg opened on this network, and Psiphon has nothing to ride on.</string>
   </resources>

@@ -22,6 +22,45 @@ import java.util.List;
  */
 final class SiphonChain {
 
+    /**
+     * The WARP transports tried in order until one carries Psiphon.
+     *
+     * The core parses "masque", "wireguard" and "gool" and sends every other
+     * string to masque without a word, so a chained session has to pick a real
+     * inner leg. Which one works is a property of the carrier, not of the user:
+     * Hamrah-e-Aval has never carried WireGuard, while other SIMs connect on it
+     * immediately, and gool works where both are blocked but stacks three
+     * tunnels under Psiphon and is the slowest.
+     *
+     * WireGuard leads because that is the leg this feature is named for and it
+     * is the cheapest handshake of the three. masque is the fallback that
+     * survives a carrier blocking WireGuard outright, since it rides ordinary
+     * HTTPS. gool is last because it costs a second WARP tunnel underneath.
+     */
+    private static final String[] INNER_LADDER = { "wireguard", "masque", "gool" };
+
+    /** How long each inner leg gets to publish its SOCKS listener. */
+    private static final long INNER_LEG_TIMEOUT_MS = 45_000L;
+
+    /**
+     * The core protocol for a requested one.
+     *
+     * Only a chained session is remapped. Every other value is passed through
+     * untouched, including ones the core will reject, so that the defaulting
+     * stays the core's single documented behaviour rather than being second-
+     * guessed here.
+     */
+    static String innerLegProtocol(String requested) {
+        String value = requested == null ? "" : requested.trim().toLowerCase(java.util.Locale.US);
+        if (!"siphon".equals(value)) return requested;
+        return INNER_LADDER[0];
+    }
+
+    /** The full ladder, for the retry that walks it. */
+    static String[] innerLadder() {
+        return INNER_LADDER.clone();
+    }
+
     /** How long to give a chosen country before falling back to every country. */
     private static final long COUNTRY_ATTEMPT_MS = 45_000L;
 
@@ -72,6 +111,9 @@ final class SiphonChain {
     static String chainSocksAddress() {
         return "127.0.0.1:" + PsiphonTunnelRunner.CHAIN_SOCKS_PORT;
     }
+
+    /** The port the inner leg listens on. */
+    static final int CHAIN_PORT = PsiphonTunnelRunner.CHAIN_SOCKS_PORT;
 
     /**
      * Start Psiphon over the core's SOCKS listener.

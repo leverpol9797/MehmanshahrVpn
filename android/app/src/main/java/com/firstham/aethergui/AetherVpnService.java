@@ -1326,7 +1326,12 @@ public final class AetherVpnService extends VpnService {
         builder.directory(getFilesDir());
         builder.redirectErrorStream(true);
         Map<String, String> env = builder.environment();
-        env.put("AETHER_PROTOCOL", value(request, "protocol", ConnectionDefaults.PROTOCOL));
+        // The core only knows masque, wireguard and gool — Protocol::parse
+        // sends anything else to masque, silently. So a chained session must
+        // name its INNER leg here: siphon is the outer layer and lives in this
+        // process, not in the core. Passing "siphon" through produced a MASQUE
+        // tunnel on 1820 that the outer half was never going to match.
+        env.put("AETHER_PROTOCOL", innerLegProtocol(value(request, "protocol", ConnectionDefaults.PROTOCOL)));
         env.put("AETHER_SCAN", value(request, "scan", ConnectionDefaults.SCAN));
         env.put("AETHER_IP", value(request, "ipMode", "v4"));
         env.put("AETHER_NOIZE", value(request, "obfuscation", ConnectionDefaults.OBFUSCATION));
@@ -2614,6 +2619,34 @@ public final class AetherVpnService extends VpnService {
      */
     private boolean startSiphonChain(Intent request, long session) throws Exception {
         if (siphonChain != null) siphonChain.stop();
+
+        String country = PsiphonRegions.preferred(this);
+        boolean cdn = getSharedPreferences("aether", MODE_PRIVATE)
+                .getBoolean("psiphonCdnFronting", false);
+        String entries = embeddedServerEntries();
+
+        // The inner leg first: Psiphon dials through it, so a chain with no
+        // inner leg has nothing to dial through. Each rung gets its own budget
+        // because the carrier decides which one is allowed, not the user.
+        String chosen = "";
+        for (String inner : SiphonChain.innerLadder()) {
+            if (!isCurrentSession(request, session)) return false;
+            sendLog("Chain: trying " + inner + " as the WARP leg");
+            Intent innerRequest = withProtocol(request, inner);
+            boolean up = startAetherWithMasqueFallback(innerRequest, SOCKS_TIMEOUT_MS);
+            if (up && isCurrentSession(request, session) && waitForChainSocks(session)) {
+                chosen = inner;
+                break;
+            }
+            sendLog("Chain: " + inner + " did not carry a listener; trying the next");
+            stopAetherOnly();
+        }
+        if (chosen.isEmpty()) {
+            throw new IllegalStateException(
+                    getString(R.string.service_psiphon_no_inner_leg));
+        }
+        sendLog("Chain: " + chosen + " is the WARP leg, Psiphon rides on it");
+
         siphonChain = new SiphonChain(this, new PsiphonTunnelRunner.Listener() {
             @Override public void onPsiphonReady(int port) {
                 sendLog("Psiphon SOCKS listening on 127.0.0.1:" + port);
@@ -2632,14 +2665,11 @@ public final class AetherVpnService extends VpnService {
             @Override public void onPsiphonLog(String line) { }
             @Override public void onPsiphonRegions(java.util.List<String> regions) { }
         });
-        String country = PsiphonRegions.preferred(this);
         siphonChain.setCountry(country);
-        siphonChain.setCdnFronting(getSharedPreferences("aether", MODE_PRIVATE)
-                .getBoolean("psiphonCdnFronting", false));
+        siphonChain.setCdnFronting(cdn);
         sendLog("Starting Psiphon over " + SiphonChain.chainSocksAddress()
                 + (country == null ? "" : " in " + PsiphonRegions.name(country)));
 
-        String entries = embeddedServerEntries();
         siphonChain.start(entries);
         long deadline = SystemClock.elapsedRealtime() + PSIPHON_TIMEOUT_MS;
         while (SystemClock.elapsedRealtime() < deadline) {
@@ -2653,6 +2683,39 @@ public final class AetherVpnService extends VpnService {
         }
         siphonChain.stop();
         throw new IllegalStateException(getString(R.string.service_psiphon_timeout));
+    }
+
+    /** A copy of the start request aimed at a specific inner leg. */
+    private static Intent withProtocol(Intent request, String protocol) {
+        Intent copy = new Intent(request);
+        copy.putExtra("protocol", protocol);
+        copy.putExtra("requestedProtocol", protocol);
+        return copy;
+    }
+
+    /**
+     * Whether the core is actually serving SOCKS on the chain's port.
+     *
+     * A process that started is not a listener: the core logs its way through
+     * endpoint hunting for a long time before it binds, and returning early
+     * would hand Psiphon an upstream that refuses connections.
+     */
+    private boolean waitForChainSocks(long session) {
+        long deadline = SystemClock.elapsedRealtime() + 5_000L;
+        java.net.InetSocketAddress address = new java.net.InetSocketAddress(
+                "127.0.0.1", SiphonChain.CHAIN_PORT);
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (!isCurrentSession(activeRequest, session)) return false;
+            try (java.net.Socket probe = new java.net.Socket()) {
+                probe.connect(address, 500);
+                sendLog("Chain: WARP leg is serving SOCKS on "
+                        + SiphonChain.chainSocksAddress());
+                return true;
+            } catch (Exception retry) {
+                Thread.sleep(200L);
+            }
+        }
+        return false;
     }
 
     /** The hex-encoded embedded server list, or empty when none is bundled. */
