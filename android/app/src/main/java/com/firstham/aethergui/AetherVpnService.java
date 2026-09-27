@@ -81,6 +81,25 @@ public final class AetherVpnService extends VpnService {
      * inner WARP leg rather than "siphon".
      */
     static final String EXTRA_CHAIN_LEG = "chainLeg";
+
+    /**
+     * The SOCKS address this request's core is publishing on.
+     *
+     * One place, because the address is chosen in two different ways and reading
+     * it from the wrong one is silent. A caller may name a port in the "socks"
+     * extra, and a chained session overrides it to 1820 regardless — 1819 belongs
+     * to Psiphon's own listener, which is about to bind there. Everything that
+     * waits for, probes, publishes or releases a port has to agree, or the chain
+     * waits its whole timeout on a port the core never opened while the port it
+     * did open goes unreferenced.
+     */
+    private static String coreSocksAddress(Intent request) {
+        if (request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
+            return SiphonChain.chainSocksAddress();
+        }
+        return request == null ? "127.0.0.1:1819"
+                : value(request, "socks", "127.0.0.1:1819");
+    }
     /**
      * How long the whole chain gets to come up.
      *
@@ -519,7 +538,7 @@ public final class AetherVpnService extends VpnService {
     private boolean prepareRetry(Intent request, long session, String requestedTransport) {
         stopRuntime();
         reapOrphanedCores();
-        awaitSocksPortReleased(value(request, "socks", "127.0.0.1:1819"));
+        awaitSocksPortReleased(coreSocksAddress(request));
         masqueH3GatewayUnavailable = false;
         connectionEstablished = false;
         recoveryRestartPending.set(false);
@@ -662,7 +681,7 @@ public final class AetherVpnService extends VpnService {
         // scheduler tick; the probe still uses the real SOCKS path and never reuses stale data.
         maybeCheckTunnelHealth();
         if (request.getBooleanExtra("lanEnabled", false)) {
-            startLanSharing(request.getIntExtra("lanPort", 18190), value(request, "socks", "127.0.0.1:1819"));
+            startLanSharing(request.getIntExtra("lanPort", 18190), coreSocksAddress(request));
             sendStatus(currentState, currentMessage);
         }
         worker.execute(() -> NetworkDiagnostics.run(this, value(request, "protocol", "masque")));
@@ -834,7 +853,7 @@ public final class AetherVpnService extends VpnService {
                     + remaining + "ms left");
             updateState("securing", getString(R.string.service_testing_gateways));
             stopAetherOnly();
-            awaitSocksPortReleased(value(request, "socks", "127.0.0.1:1819"));
+            awaitSocksPortReleased(coreSocksAddress(request));
             sleepQuietly(TRAFFIC_READY_ROLL_SETTLE_MS);
             ensureConnectNotTimedOut(session);
             if (!isCurrentSession(request, session)) return false;
@@ -864,7 +883,7 @@ public final class AetherVpnService extends VpnService {
         if (process == null) return "the core process is gone";
         if (!process.isAlive()) return "the core process exited with status " + exitStatus(process);
         if (masqueH3GatewayUnavailable) return "MASQUE reported no usable gateway";
-        String socks = value(request, "socks", "127.0.0.1:1819");
+        String socks = coreSocksAddress(request);
         try {
             if (!socksHandshakeSucceeds(HostPort.parse(socks))) {
                 return "the core stopped accepting SOCKS5 on " + socks;
@@ -928,7 +947,7 @@ public final class AetherVpnService extends VpnService {
     }
 
     private boolean validateTrafficReady(Intent request, long session, long pipelineStarted, int attempts) throws Exception {
-        String socks = value(request, "socks", "127.0.0.1:1819");
+        String socks = coreSocksAddress(request);
         Exception last = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             if (!isCurrentSession(request, session)) return false;
@@ -1006,7 +1025,7 @@ public final class AetherVpnService extends VpnService {
         int[] usable = usableMtuCandidates(ceiling);
         sendLog("MTU automatic probing protocol=" + protocol + " link_mtu=" + (linkMtu > 0 ? linkMtu : -1)
                 + " ceiling=" + ceiling + " candidates=" + Arrays.toString(usable));
-        String socks = value(request, "socks", "127.0.0.1:1819");
+        String socks = coreSocksAddress(request);
         int lo = 0;
         int hi = usable.length - 1;
         int best = -1;
@@ -1348,7 +1367,7 @@ public final class AetherVpnService extends VpnService {
         // A previous core that outlived its session still owns the SOCKS port and its upstream
         // sockets. Clearing it here is what makes a repeated Connect deterministic.
         reapOrphanedCores();
-        awaitSocksPortReleased(value(request, "socks", "127.0.0.1:1819"));
+        awaitSocksPortReleased(coreSocksAddress(request));
 
         ProcessBuilder builder = new ProcessBuilder(executable.getAbsolutePath());
         builder.directory(getFilesDir());
@@ -1378,10 +1397,9 @@ public final class AetherVpnService extends VpnService {
         // "siphon" was false and the core published on 1819, which is where
         // Psiphon's own listener sits. The two collided and the probe of 1820
         // timed out on a leg that was up and validated.
-        boolean chainedLeg = request.getBooleanExtra(EXTRA_CHAIN_LEG, false);
-        env.put("AETHER_SOCKS", chainedLeg
-                ? SiphonChain.chainSocksAddress()
-                : value(request, "socks", "127.0.0.1:1819"));
+        // The same call every probe and publish uses, so the port the core
+        // opens and the port the app waits on cannot drift apart.
+        env.put("AETHER_SOCKS", coreSocksAddress(request));
         env.put("AETHER_CONFIG", new File(getFilesDir(), "aether.toml").getAbsolutePath());
         env.put("AETHER_QUICK_RECONNECT", request.getBooleanExtra("quickReconnect", true) ? "1" : "0");
         String transport = value(request, "transport", ConnectionDefaults.TRANSPORT);
@@ -1539,7 +1557,7 @@ public final class AetherVpnService extends VpnService {
     private boolean startAetherWithMasqueFallback(Intent request, long timeoutMs) throws Exception {
         long started = SystemClock.elapsedRealtime();
         startAether(request);
-        String socks = value(request, "socks", "127.0.0.1:1819");
+        String socks = coreSocksAddress(request);
         boolean masqueH3 = "masque".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL))
                 && "h3".equals(value(request, "transport", ConnectionDefaults.TRANSPORT));
         long primaryTimeout = masqueH3 ? Math.min(timeoutMs, MASQUE_H3_PRIMARY_TIMEOUT_MS) : timeoutMs;
@@ -1598,7 +1616,7 @@ public final class AetherVpnService extends VpnService {
     private SmartResult benchmarkProtocol(Intent request, String protocol, long session) {
         long started = System.nanoTime();
         try {
-            String socks = value(request, "socks", "127.0.0.1:1819");
+            String socks = coreSocksAddress(request);
             boolean connected = startAetherWithMasqueFallback(request, SMART_PROTOCOL_TIMEOUT_MS);
             long handshakeMs = elapsedMillis(started);
             if (!connected) return SmartResult.failed(protocol, handshakeMs);
@@ -1699,7 +1717,7 @@ public final class AetherVpnService extends VpnService {
             String location = "";
             try {
                 if (!isLocationLookupCurrent(lookup, session)) return;
-                String socksAddress = value(request, "socks", "127.0.0.1:1819");
+                String socksAddress = coreSocksAddress(request);
                 String address = "";
                 String traceCountry = "";
                 try {
@@ -1875,7 +1893,7 @@ public final class AetherVpnService extends VpnService {
     }
 
     private GoolExit lookupGoolExit(Intent request) throws Exception {
-        String socksAddress = value(request, "socks", "127.0.0.1:1819");
+        String socksAddress = coreSocksAddress(request);
         JSONObject geo = null;
         String address = "";
         try {
@@ -2133,7 +2151,7 @@ public final class AetherVpnService extends VpnService {
     }
 
     private File writeTunConfig(Intent request) throws Exception {
-        HostPort socks = HostPort.parse(value(request, "socks", "127.0.0.1:1819"));
+        HostPort socks = HostPort.parse(coreSocksAddress(request));
         File config = new File(getCacheDir(), "hev.yml");
         try (FileWriter writer = new FileWriter(config, false)) {
             writer.write("misc:\n");
@@ -2342,7 +2360,7 @@ public final class AetherVpnService extends VpnService {
             worker.execute(() -> {
                 try {
                     if (request == null || stopping || !active) return;
-                    String socks = value(request, "socks", "127.0.0.1:1819");
+                    String socks = coreSocksAddress(request);
                     lastPing = socksConnectMillis(socks, "1.1.1.1", 443, 4_000);
                     lastSuccessfulHealthAt = System.currentTimeMillis();
                     consecutiveHealthFailures = 0;

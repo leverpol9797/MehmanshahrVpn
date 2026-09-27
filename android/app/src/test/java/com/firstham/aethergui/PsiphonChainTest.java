@@ -85,10 +85,48 @@ public final class PsiphonChainTest {
         int env = source.indexOf("AETHER_SOCKS");
         assertTrue(env > 0);
         String decision = source.substring(env, env + 200);
-        assertTrue("AETHER_SOCKS must branch on the chain flag",
-                decision.contains("chainedLeg") || decision.contains("EXTRA_CHAIN_LEG"));
+        assertTrue("AETHER_SOCKS must go through the one shared accessor",
+                decision.contains("coreSocksAddress(request)"));
         assertFalse("and never on the protocol string: the ladder passes inner legs here",
                 decision.contains("\"siphon\".equals(protocol)"));
+    }
+
+    /**
+     * Every place that names the core's SOCKS port goes through one accessor.
+     *
+     * The chain overrides the port to 1820, and that override lives in an intent
+     * flag rather than in any extra the caller sets. Reading the "socks" extra
+     * directly — which thirteen call sites did — meant waitForSocks polled 1819
+     * for the full sixty seconds while the core was already serving 1820, and
+     * every rung was discarded as a failure. The log showed a leg validated at
+     * 03:31:16 and the next rung starting at 03:32:00: exactly that wait.
+     */
+    @Test public void everySocksPortReadGoesThroughOneAccessor() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        // The accessor's own fallback legitimately names the default, so the
+        // count is taken over everything outside its body rather than the whole
+        // file — otherwise the one correct occurrence fails the test.
+        int accessor = source.indexOf("private static String coreSocksAddress(Intent request)");
+        assertTrue("the accessor must exist", accessor > 0);
+        int end = source.indexOf("\n    }", accessor);
+        assertTrue(end > accessor);
+        String callers = source.substring(0, accessor) + source.substring(end);
+        int direct = countOccurrences(callers, "value(request, \"socks\", \"127.0.0.1:1819\")");
+        assertEquals("no call site may name the default port on its own", 0, direct);
+        assertTrue("and the accessor must be the one that consults the chain flag",
+                source.contains("EXTRA_CHAIN_LEG, false")
+                        && source.contains("SiphonChain.chainSocksAddress()"));
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        int at = haystack.indexOf(needle);
+        while (at >= 0) {
+            count++;
+            at = haystack.indexOf(needle, at + needle.length());
+        }
+        return count;
     }
 
     @Test public void siphonIsNeverHandedToTheCore() {
