@@ -339,6 +339,55 @@ public final class PsiphonChainTest {
                 source.contains("env.put(\"AETHER_SOCKS\", coreSocksAddress(request))"));
     }
 
+    /**
+     * The chain waits for a tunnel, not for a bound port.
+     *
+     * onListeningSocksProxyPort fires about a second after start; onConnected fires
+     * tens of seconds later, after every candidate has been tried and refused.
+     * Returning on the port let the traffic gate run against a SOCKS listener with
+     * no server behind it, and the gate's response to that was to restart the core
+     * — Psiphon's upstream. Every in-flight handshake came back "connection
+     * refused", a failure the next roll repeated:
+     *
+     *   failed to connect to 2YGk+CJD: ... dial tcp: connect: connection refused
+     */
+    @Test public void aChainedSessionWaitsForARealTunnel() throws Exception {
+        String chain = read("src", "main", "java", "com", "firstham", "aethergui",
+                "SiphonChain.java");
+        assertTrue("the chain must track a tunnel, not only a port",
+                chain.contains("tunnelReady"));
+        assertTrue("and set it from the connected callback",
+                chain.contains("tunnelReady = true;"));
+
+        String service = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int start = service.indexOf("private boolean startSiphonChain(");
+        // Bounded by siphonChain.start(), not by the method: stop() also appears in
+        // the cleanup block at the top, well before the wait loop runs.
+        int body = service.indexOf("siphonChain.tunnelReady()", start);
+        int began = service.indexOf("siphonChain.start(", start);
+        assertTrue("startSiphonChain must return on tunnelReady",
+                start > 0 && began > start && body > began);
+    }
+
+    /**
+     * A chain never re-rolls the core for a traffic failure.
+     *
+     * Re-rolling is stopAetherOnly, which closes the port Psiphon is dialling
+     * through. On a chain that converts a Psiphon problem into a self-inflicted
+     * one, and each roll repeats it. A bad WARP edge is the ladder's job, and the
+     * ladder runs before Psiphon starts.
+     */
+    @Test public void aChainNeverRerollsTheCore() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int gate = source.indexOf("private boolean validateTrafficReady(");
+        int roll = source.indexOf("stopAetherOnly()", gate);
+        int guard = source.indexOf("EXTRA_CHAIN_LEG, false)", gate);
+        assertTrue("the guard has to come before the restart it prevents",
+                gate > 0 && guard > gate && guard < roll);
+    }
+
     @Test public void cdnFrontingIsOptIn() {
         assertTrue(!PsiphonTunnelRunner.configJson(null, false).contains("FrontedMeekCDNScan"));
         assertTrue(PsiphonTunnelRunner.configJson(null, true).contains("FrontedMeekCDNScan"));

@@ -884,6 +884,19 @@ public final class AetherVpnService extends VpnService {
                 break;
             }
             if (!isCurrentSession(request, session)) return false;
+            if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
+                // Never restart the core under Psiphon.
+                //
+                // The core is Psiphon's upstream. Re-rolling it means stopAetherOnly,
+                // which closes 1820 while Psiphon is mid-handshake with a server, and
+                // every one of those comes back "connect: connection refused" — a
+                // self-inflicted failure the next roll then repeats. A bad Cloudflare edge
+                // is also the wrong diagnosis here: the ladder exists to move off a bad
+                // WARP leg, and it runs before Psiphon starts at all.
+                sendLog("Traffic gate will not re-roll: a chain's core is Psiphon's "
+                        + "upstream, and restarting it fails every tunnel in flight");
+                break;
+            }
             String diagnosis = diagnoseTunnel(request);
             if (diagnosis != null) {
                 sendLog("Traffic gate will not re-roll: " + diagnosis);
@@ -2820,12 +2833,23 @@ public final class AetherVpnService extends VpnService {
         long deadline = SystemClock.elapsedRealtime() + PSIPHON_TIMEOUT_MS;
         while (SystemClock.elapsedRealtime() < deadline) {
             if (!isCurrentSession(request, session)) return false;
-            if (siphonChain.readyPort() > 0) {
-                // The bridge attaches here, on the port that is actually
-                // carrying. Established earlier it would point at the core's
-                // 1820 with nothing behind it, and the session would publish
-                // "connected" while every packet went nowhere.
+            if (siphonChain.readyPort() > 0 && !bridgeStarted) {
+                // The bridge attaches on the port, because that is all it needs to
+                // be aimed somewhere real. Established earlier it would aim at the
+                // core's 1820 with nothing behind it.
                 attachChainBridge(request, session);
+            }
+            if (siphonChain.tunnelReady()) {
+                // Returning on readyPort() alone was the last thing standing between
+                // this and working. The port opens about a second after start; the
+                // tunnel arrives tens of seconds later, after every candidate has
+                // been tried and refused. Returning early let the traffic gate run
+                // against a SOCKS port with no server behind it, the gate failed,
+                // and the re-roll restarted the core — which is Psiphon's upstream,
+                // so it pulled the ground out from under a handshake still in
+                // progress:
+                //
+                //   failed to connect to 2YGk+CJD: ... dial tcp: connection refused
                 return isCurrentSession(request, session) && bridgeStarted;
             }
             // A chosen country that will not come up is worth one retry without

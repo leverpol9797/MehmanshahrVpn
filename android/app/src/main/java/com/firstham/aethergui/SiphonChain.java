@@ -64,6 +64,21 @@ final class SiphonChain {
     private boolean countryAttemptDone;
     private long countryAttemptStartedAt;
     private volatile int readyPort;
+
+    /**
+     * Whether Psiphon has an actual server tunnel, as opposed to an open port.
+     *
+     * These are minutes apart, not milliseconds. onListeningSocksProxyPort fires
+     * as soon as the library binds 1819 — within about a second of start — while
+     * onConnected only fires once a server has accepted a connection, which on a
+     * restrictive carrier is tens of seconds and involves hundreds of rejected
+     * candidates. Gating on the port meant gating on the half of that has no
+     * network to it, so the gate failed, the re-roll restarted the core, and
+     * that took Psiphon's upstream away mid-handshake:
+     *
+     *   failed to connect to 2YGk+CJD: ... dial tcp: connect: connection refused
+     */
+    private volatile boolean tunnelReady;
     private volatile boolean connected;
 
     SiphonChain(AetherVpnService service, PsiphonTunnelRunner.Listener listener) {
@@ -91,6 +106,11 @@ final class SiphonChain {
     /** The port the hev bridge should attach to, or 0 while Psiphon is not up. */
     int readyPort() {
         return readyPort;
+    }
+
+    /** True once Psiphon reports a connected server, not merely a bound port. */
+    boolean tunnelReady() {
+        return tunnelReady;
     }
 
     boolean isConnected() {
@@ -129,6 +149,7 @@ final class SiphonChain {
         stop();
         countryAttemptDone = false;
         readyPort = 0;
+        tunnelReady = false;
         connected = false;
         runner = new PsiphonTunnelRunner(service, new PsiphonTunnelRunner.Listener() {
             @Override public void onPsiphonReady(int port) {
@@ -146,6 +167,7 @@ final class SiphonChain {
             }
 
             @Override public void onPsiphonConnected() {
+                tunnelReady = true;
                 connected = true;
                 listener.onPsiphonConnected();
             }
@@ -199,6 +221,7 @@ final class SiphonChain {
             runner = null;
         }
         readyPort = 0;
+        tunnelReady = false;
         connected = false;
         countryAttemptStartedAt = 0L;
     }
