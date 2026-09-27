@@ -76,6 +76,12 @@ public final class AetherVpnService extends VpnService {
     private static final int ALERT_NOTIFICATION_ID = 1820;
     private static final int SOCKS_TIMEOUT_MS = 60_000;
     /**
+     * Set on the start request when this session is a chain, so the core
+     * publishes on the chain's port even though the protocol it is handed is an
+     * inner WARP leg rather than "siphon".
+     */
+    static final String EXTRA_CHAIN_LEG = "chainLeg";
+    /**
      * How long the whole chain gets to come up.
      *
      * Longer than SOCKS_TIMEOUT_MS on purpose: that budget is for the core
@@ -590,6 +596,10 @@ public final class AetherVpnService extends VpnService {
               //  3. Psiphon last. The bridge attaches from its own onConnected(),
               //     so device traffic only ever reaches a tunnel that is carrying.
               if (!establishVpn(request, session)) return false;
+              // Mark the request as a chain before the inner legs start, so
+              // buildCoreEnv moves their SOCKS listener to 1820 rather than
+              // 1819 — where Psiphon's own listener is about to bind.
+              request.putExtra(EXTRA_CHAIN_LEG, true);
               if (!startSiphonChain(request, session)) return false;
               sendLog("Performance psiphon_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
           } else {
@@ -1362,8 +1372,14 @@ public final class AetherVpnService extends VpnService {
         // because the inner leg's port is not a user choice — Psiphon's
         // UpstreamProxyURL is hard-coded to it, so a different number would
         // break the chain rather than move it.
-        boolean chained = "siphon".equals(protocol);
-        env.put("AETHER_SOCKS", chained
+        // Read from the intent, not from the protocol name. On a chained session
+        // the protocol here is the INNER leg — wireguard, masque or gool —
+        // because that is what the core is asked to run, so testing it against
+        // "siphon" was false and the core published on 1819, which is where
+        // Psiphon's own listener sits. The two collided and the probe of 1820
+        // timed out on a leg that was up and validated.
+        boolean chainedLeg = request.getBooleanExtra(EXTRA_CHAIN_LEG, false);
+        env.put("AETHER_SOCKS", chainedLeg
                 ? SiphonChain.chainSocksAddress()
                 : value(request, "socks", "127.0.0.1:1819"));
         env.put("AETHER_CONFIG", new File(getFilesDir(), "aether.toml").getAbsolutePath());
@@ -2723,6 +2739,11 @@ public final class AetherVpnService extends VpnService {
         Intent copy = new Intent(request);
         copy.putExtra("protocol", protocol);
         copy.putExtra("requestedProtocol", protocol);
+        // Carried from the original request: a chain's inner leg is a plain WARP
+        // protocol as far as the core is concerned, so the core has to be told
+        // separately that this particular run is a chain.
+        copy.putExtra(EXTRA_CHAIN_LEG,
+                request.getBooleanExtra(EXTRA_CHAIN_LEG, false));
         return copy;
     }
 

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -48,21 +49,49 @@ public final class PsiphonChainTest {
         // Psiphon's NetworkMonitor reads tun0 appearing as a network change and
         // restarts the controller, so a TUN created after Psiphon starts is not
         // a race to be lost — it is a 13-second restart loop to be sat through.
-        // The order in the connect path is the only thing holding this, so it is
-        // pinned here rather than trusted to a comment.
+        //
+        // Compared as positions rather than as a matched block, because an exact
+        // string pins the two lines to being adjacent and went stale the moment
+        // anything was inserted between them. What matters is the order, not the
+        // adjacency.
         String source = read("src", "main", "java", "com", "firstham", "aethergui",
                 "AetherVpnService.java");
-        int tun = source.indexOf("if (!establishVpn(request, session)) return false;\n"
-                + "              if (!startSiphonChain(request, session)) return false;");
-        assertTrue("the TUN must be established before the chain starts", tun > 0);
+        int tun = source.indexOf("if (!establishVpn(request, session)) return false;");
+        int chain = source.indexOf("if (!startSiphonChain(request, session)) return false;");
+        assertTrue("the TUN must be established somewhere in the connect path", tun > 0);
+        assertTrue("the chain must be started somewhere in the connect path", chain > 0);
+        assertTrue("the TUN must be established before the chain starts", tun < chain);
+        // And the flag has to be set before the ladder runs, or the inner legs
+        // publish on 1819 where Psiphon's own listener is about to bind.
+        int flag = source.indexOf("request.putExtra(EXTRA_CHAIN_LEG, true)");
+        int ladder = source.indexOf("SiphonChain.innerLadder()");
+        assertTrue("the chain flag must be set before the inner legs start", flag > 0);
+        assertTrue(flag < ladder);
+    }
+
+    /**
+     * A chain is recognised by an intent flag, never by the protocol name.
+     *
+     * The ladder hands the core an inner leg — wireguard, masque or gool — and
+     * that is the only protocol the core is being asked to run. Testing the
+     * protocol against "siphon" was therefore false on every rung, the core
+     * published on 1819 where Psiphon's own listener binds, and the chain's
+     * probe of 1820 timed out on legs that were up and validated. The field log
+     * shows all three rungs doing exactly that.
+     */
+    @Test public void theChainIsFlaggedOnTheRequestNotInferredFromTheProtocol() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int env = source.indexOf("AETHER_SOCKS");
+        assertTrue(env > 0);
+        String decision = source.substring(env, env + 200);
+        assertTrue("AETHER_SOCKS must branch on the chain flag",
+                decision.contains("chainedLeg") || decision.contains("EXTRA_CHAIN_LEG"));
+        assertFalse("and never on the protocol string: the ladder passes inner legs here",
+                decision.contains("\"siphon\".equals(protocol)"));
     }
 
     @Test public void siphonIsNeverHandedToTheCore() {
-        // The core's Protocol::parse ends in `_ => Protocol::Masque`, so an
-        // unknown string is accepted silently and becomes MASQUE. Passing
-        // "siphon" produced a MASQUE tunnel on 1820 that the outer half was
-        // never going to match, and the field log showed exactly that: a masque
-        // identity provisioned, a masque gateway hunt, and no SOCKS listener.
         assertEquals("wireguard", AetherVpnService.innerLegProtocol("siphon"));
     }
 
