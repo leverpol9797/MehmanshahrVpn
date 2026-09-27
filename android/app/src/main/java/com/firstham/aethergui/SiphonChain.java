@@ -102,6 +102,21 @@ final class SiphonChain {
         return "127.0.0.1:" + PsiphonTunnelRunner.CHAIN_SOCKS_PORT;
     }
 
+    /**
+     * The address the device's own traffic arrives at.
+     *
+     * Not the core's, and the difference is the whole point of the chain. Device
+     * traffic goes tun0, then the bridge, then Psiphon, then the core. A probe
+     * that dials the core directly measures the WARP leg alone, so on a chain it
+     * answers a question about half the tunnel — and answers it early, before
+     * Psiphon has a server at all. That is how the traffic gate went green at
+     * 4186ms while Psiphon was still reporting "no active tunnels", and why the
+     * location shown was the WARP exit rather than the one the user gets.
+     */
+    static String deviceSocksAddress() {
+        return "127.0.0.1:" + PsiphonTunnelRunner.SOCKS_PORT;
+    }
+
     /** The port the inner leg listens on. */
     static final int CHAIN_PORT = PsiphonTunnelRunner.CHAIN_SOCKS_PORT;
 

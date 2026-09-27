@@ -82,9 +82,10 @@ public final class PsiphonChainTest {
     @Test public void theChainIsFlaggedOnTheRequestNotInferredFromTheProtocol() throws Exception {
         String source = read("src", "main", "java", "com", "firstham", "aethergui",
                 "AetherVpnService.java");
-        int env = source.indexOf("AETHER_SOCKS");
+        int env = source.indexOf("env.put(\"AETHER_SOCKS\"");
         assertTrue(env > 0);
-        String decision = source.substring(env, env + 200);
+        int lineEnd = source.indexOf('\n', env);
+        String decision = source.substring(env, lineEnd);
         assertTrue("AETHER_SOCKS must go through the one shared accessor",
                 decision.contains("coreSocksAddress(request)"));
         assertFalse("and never on the protocol string: the ladder passes inner legs here",
@@ -298,6 +299,44 @@ public final class PsiphonChainTest {
         // non-chained sessions have always relied on it for DNS.
         assertFalse("the bare default must not be hardcoded over the computed mode",
                 source.contains("writer.write(\"  udp: 'udp'\\n\")"));
+    }
+
+    /**
+     * The traffic gate and the location lookup measure the device's path, not the core's.
+     *
+     * On a chain the device goes tun0, bridge, Psiphon, core. A probe that dials
+     * the core directly measures the WARP leg alone — and answers early, before
+     * Psiphon has any server. The field log shows exactly that: traffic_ready
+     * green at 4186ms total while Psiphon was still logging "no active tunnels",
+     * and a location reading taken from the WARP exit rather than the exit the
+     * user actually gets.
+     *
+     * Two accessors, because these are genuinely two questions: is the WARP leg
+     * up, and does a request from the device reach the internet.
+     */
+    @Test public void deviceFacingProbesGoThroughTheDevicePath() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        // Each device-facing method has to name it, checked inside that method's
+        // own body so a caller elsewhere cannot satisfy the assertion for it.
+        // Matched on the declaration, not the name: maybeCheckTunnelHealth() is
+        // also called from elsewhere, and an indexOf on the bare name can land on
+        // a call site whose next "private" is hundreds of lines away.
+        for (String declaration : new String[]{
+                "private boolean validateTrafficReady(",
+                "private void scheduleLocationLookup(",
+                "private void maybeCheckTunnelHealth("}) {
+            int start = source.indexOf(declaration);
+            assertTrue("could not locate " + declaration, start > 0);
+            int next = source.indexOf("\n    private ", start + 10);
+            int body = source.indexOf("deviceSocksAddress(request)", start);
+            assertTrue(declaration + " must probe the device path",
+                    body > start && (next < 0 || body < next));
+        }
+        // And the core's own machinery must not have been redirected: the ladder,
+        // the port release and AETHER_SOCKS are questions about the WARP leg.
+        assertTrue("AETHER_SOCKS still names the core port",
+                source.contains("env.put(\"AETHER_SOCKS\", coreSocksAddress(request))"));
     }
 
     @Test public void cdnFrontingIsOptIn() {

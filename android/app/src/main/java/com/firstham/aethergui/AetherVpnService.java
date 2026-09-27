@@ -107,6 +107,23 @@ public final class AetherVpnService extends VpnService {
      * in practice, because a SOCKS5 upstream cannot carry a UDP associate anyway
      * — which is also why Psiphon stops offering QUIC-OSSH on this leg.
      */
+    /**
+     * The SOCKS address the device's traffic actually arrives at.
+     *
+     * One place, for the same reason coreSocksAddress is one place. On a chain
+     * these are two different ports serving two different questions: the core's
+     * answers "is the WARP leg up", this one answers "does a request from the
+     * device reach the internet". The traffic gate, the location lookup and LAN
+     * sharing all ask the second question and so must dial this; the ladder, the
+     * port release and AETHER_SOCKS ask the first.
+     */
+    private static String deviceSocksAddress(Intent request) {
+        if (request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
+            return SiphonChain.deviceSocksAddress();
+        }
+        return coreSocksAddress(request);
+    }
+
     private static String socksUdpMode(Intent request) {
         return request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false) ? "tcp" : "udp";
     }
@@ -706,7 +723,7 @@ public final class AetherVpnService extends VpnService {
         // scheduler tick; the probe still uses the real SOCKS path and never reuses stale data.
         maybeCheckTunnelHealth();
         if (request.getBooleanExtra("lanEnabled", false)) {
-            startLanSharing(request.getIntExtra("lanPort", 18190), coreSocksAddress(request));
+            startLanSharing(request.getIntExtra("lanPort", 18190), deviceSocksAddress(request));
             sendStatus(currentState, currentMessage);
         }
         worker.execute(() -> NetworkDiagnostics.run(this, value(request, "protocol", "masque")));
@@ -972,7 +989,7 @@ public final class AetherVpnService extends VpnService {
     }
 
     private boolean validateTrafficReady(Intent request, long session, long pipelineStarted, int attempts) throws Exception {
-        String socks = coreSocksAddress(request);
+        String socks = deviceSocksAddress(request);
         Exception last = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             if (!isCurrentSession(request, session)) return false;
@@ -1766,7 +1783,7 @@ public final class AetherVpnService extends VpnService {
             String location = "";
             try {
                 if (!isLocationLookupCurrent(lookup, session)) return;
-                String socksAddress = coreSocksAddress(request);
+                String socksAddress = deviceSocksAddress(request);
                 String address = "";
                 String traceCountry = "";
                 try {
@@ -2422,7 +2439,7 @@ public final class AetherVpnService extends VpnService {
             worker.execute(() -> {
                 try {
                     if (request == null || stopping || !active) return;
-                    String socks = coreSocksAddress(request);
+                    String socks = deviceSocksAddress(request);
                     lastPing = socksConnectMillis(socks, "1.1.1.1", 443, 4_000);
                     lastSuccessfulHealthAt = System.currentTimeMillis();
                     consecutiveHealthFailures = 0;
