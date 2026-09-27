@@ -388,6 +388,56 @@ public final class PsiphonChainTest {
                 gate > 0 && guard > gate && guard < roll);
     }
 
+    /**
+     * A chain routes DNS inside the bridge, because UDP cannot leave it.
+     *
+     * hev-socks5-tunnel has no CONNECT-only mode. UDP is enabled unconditionally
+     * in lwIP, and the one key that picks the SOCKS5 command for it has two values
+     * and no third:
+     *
+     *   udp: 'udp' -> 0x03 UDP ASSOCIATE, which Psiphon refuses
+     *   udp: 'tcp' -> 0x05 BIND, which Psiphon also refuses
+     *   omitted    -> 0x05, the C default rather than the README's "udp"
+     *
+     * So the commands cannot be configured away; the UDP has to be taken off the
+     * wire. mapdns does that — hev answers DNS locally and only resolves through
+     * the tunnel on a cache miss — and the TUN resolver has to point at the same
+     * 198.18.0.2, or the two disagree and a working tunnel looks dead.
+     */
+    @Test public void aChainAnswersDnsInsideTheBridge() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        assertTrue("mapdns must be written for a chain",
+                source.contains("writer.write(\"mapdns:\\n\")"));
+        assertTrue("with a cache, or nothing ever resolves",
+                source.contains("cache-size:"));
+        assertTrue("and the TUN must point at the same address",
+                source.contains("builder.addDnsServer(HEV_MAPPED_DNS)"));
+        assertTrue("named once", source.contains("HEV_MAPPED_DNS = \"198.18.0.2\""));
+        // The direct sessions keep the public resolvers: the core grants UDP
+        // ASSOCIATE, so 1.1.1.1 works there and is the right answer.
+        assertTrue(source.contains("builder.addDnsServer(\"1.1.1.1\")"));
+    }
+
+    /**
+     * The licence gate is one switch, read where the decision is made.
+     *
+     * Testing a tunnel means uninstalling the previous build, and an uninstall
+     * takes the stored licence with it, so every iteration otherwise means the
+     * whole purchase path again before the app will connect.
+     */
+    @Test public void theLicenceGateHasExactlyOneSwitch() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AuthGate.java");
+        int gate = source.indexOf("public static boolean isValid(Context context)");
+        int off = source.indexOf("if (DISABLED) return true;", gate);
+        int verify = source.indexOf("LicenseVerifier.verify(", gate);
+        assertTrue("the bypass has to be inside isValid, before any verification",
+                gate > 0 && off > gate && verify > off);
+        assertTrue("and it has to come from the build flag",
+                source.contains("BuildConfig.LICENCE_GATE_DISABLED"));
+    }
+
     @Test public void cdnFrontingIsOptIn() {
         assertTrue(!PsiphonTunnelRunner.configJson(null, false).contains("FrontedMeekCDNScan"));
         assertTrue(PsiphonTunnelRunner.configJson(null, true).contains("FrontedMeekCDNScan"));

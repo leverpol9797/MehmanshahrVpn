@@ -61,12 +61,29 @@ public final class AuthGate {
     }
 
     /**
+     * Build-time licence bypass, for development installs only.
+     *
+     * Set to true in build.gradle while iterating on the tunnel. It is false in
+     * the committed tree, and the release workflow does not set it, so a published
+     * build can never carry it. Its purpose is narrow: testing a tunnel means
+     * uninstalling the previous build, and an uninstall takes the stored licence
+     * with it, so every iteration otherwise means walking the whole purchase
+     * path again — bot, one-time code, approval — before the app will connect.
+     *
+     * Read here rather than at the two call sites because this is the only place
+     * that decides. A bypass added at each caller would leave whichever new entry
+     * point arrived later ungated.
+     */
+    private static final boolean DISABLED = BuildConfig.LICENCE_GATE_DISABLED;
+
+    /**
      * The gate itself. Called before the tunnel is built, not just by the UI —
      * the quick-settings tile and the home-screen widget both reach the service
      * without ever opening an activity, so a check anywhere else leaves the
      * tunnel startable.
      */
     public static boolean isValid(Context context) {
+        if (DISABLED) return true;
         String stored = stored(context);
         return stored != null && LicenseVerifier.verify(stored, LicenseVerifier.PUBLIC_KEY_B64,
                 now(), DeviceId.get(context)).isValid();

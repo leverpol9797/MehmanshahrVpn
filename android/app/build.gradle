@@ -1,5 +1,28 @@
 plugins { id 'com.android.application' }
 
+// ---------------------------------------------------------------------------------
+// LICENCE GATE — DEVELOPMENT ONLY. FLIP THIS BACK TO false BEFORE A REAL RELEASE.
+//
+//   -PlicenceGateDisabled=false
+//
+// True means every install is let through without a signed licence. It is a
+// build-time constant read by AuthGate, which is the single place that decides, so
+// there is no second path around it.
+//
+// It exists because testing a tunnel means uninstalling the previous build, and an
+// uninstall takes the stored licence with it. Without this, every iteration means
+// the whole purchase path again — mobile number, bot, one-time code, your manual
+// approval — before the app will even connect, which makes it impossible to
+// iterate on a chain that takes 120 seconds to fail.
+//
+// While this is true, any APK anyone downloads will run without paying. The
+// licence Worker, the Rubika bot and the approval flow are untouched; only the
+// app's refusal to start without a licence is switched off.
+// ---------------------------------------------------------------------------------
+ext.licenceGateDisabled = project.hasProperty('licenceGateDisabled')
+        ? project.property('licenceGateDisabled').toBoolean()
+        : true
+
 dependencies {
     implementation 'androidx.core:core:1.15.0'
     implementation 'androidx.appcompat:appcompat:1.7.0'
@@ -40,8 +63,8 @@ android {
         applicationId 'com.mehmanshahr.vpn'
         minSdk 26
         targetSdk 35
-        versionCode 40
-        versionName '2.4.14'
+        versionCode 41
+        versionName '2.4.15'
     }
 
     signingConfigs {
@@ -62,6 +85,11 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            buildConfigField 'boolean', 'LICENCE_GATE_DISABLED', licenceGateDisabled.toString()
+            logger.warn("LICENCE_GATE_DISABLED=${licenceGateDisabled} — every install is allowed through.")
+        }
+        debug {
+            buildConfigField 'boolean', 'LICENCE_GATE_DISABLED', licenceGateDisabled.toString()
         }
     }
 

@@ -83,6 +83,14 @@ public final class AetherVpnService extends VpnService {
     static final String EXTRA_CHAIN_LEG = "chainLeg";
 
     /**
+     * HEV's own mapped DNS address, used as the TUN resolver on a chain.
+     *
+     * It has to match the mapdns.address in the bridge config, or the two disagree
+     * and resolution fails in a way that looks like a dead tunnel.
+     */
+    private static final String HEV_MAPPED_DNS = "198.18.0.2";
+
+    /**
      * The SOCKS address this request's core is publishing on.
      *
      * One place, because the address is chosen in two different ways and reading
@@ -1297,7 +1305,17 @@ public final class AetherVpnService extends VpnService {
             // Both resolvers are public addresses covered by the tunnel routes above, so every
             // lookup - including the hostname behind Android Private DNS - is carried inside the
             // tunnel and no query reaches the carrier resolver.
-            builder.addDnsServer("1.1.1.1").addDnsServer("1.0.0.1");
+            //
+            // On a chain they are HEV's own mapped resolver instead. Pointing the TUN at
+            // 1.1.1.1 would send every query straight back out as UDP, and UDP is the one
+            // thing Psiphon's SOCKS cannot carry — each one came back as a rejected
+            // SOCKS5 command. 198.18.0.2 is answered inside the bridge and only leaves
+            // as a real query on a cache miss.
+            if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
+                builder.addDnsServer(HEV_MAPPED_DNS);
+            } else {
+                builder.addDnsServer("1.1.1.1").addDnsServer("1.0.0.1");
+            }
         } else {
             // The VPN declares no resolver, so Android falls back to the underlying network's DNS.
             // Carrier resolvers live on RFC1918 addresses that the tunnel cannot reach, so those
@@ -2263,6 +2281,32 @@ public final class AetherVpnService extends VpnService {
             writer.write("  address: '" + yamlEscape(socks.host) + "'\n");
             writer.write("  port: " + socks.port + "\n");
             writer.write("  udp: '" + socksUdpMode(request) + "'\n");
+            if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
+                // HEV cannot be told to carry CONNECT only. UDP is switched on
+                // unconditionally in lwIP, and the one config key that decides the
+                // SOCKS5 command it uses for UDP has no third value:
+                //
+                //   udp: 'udp' -> 0x03 UDP ASSOCIATE   (Psiphon refuses)
+                //   udp: 'tcp' -> 0x05 BIND            (Psiphon refuses)
+                //   omitted    -> 0x05, the C default, not the README's "udp"
+                //
+                // So the flood cannot be configured away; it has to be taken off the
+                // wire. mapdns does that: HEV answers DNS itself from a local cache
+                // and only resolves through the tunnel when the cache misses. DNS is
+                // effectively all the UDP a phone generates, and it was the source of
+                // hundreds of these per minute.
+                //
+                // The addresses are HEV's own CGNAT defaults (hev-config.c
+                // hev_config_reset). 198.18.0.2 is the resolver the client is told to
+                // use and 100.64.0.0/10 is the synthetic network it hands back, so
+                // nothing here can collide with a real route.
+                writer.write("mapdns:\n");
+                writer.write("  address: " + HEV_MAPPED_DNS + "\n");
+                writer.write("  port: 53\n");
+                writer.write("  network: 100.64.0.0\n");
+                writer.write("  netmask: 255.192.0.0\n");
+                writer.write("  cache-size: 4096\n");
+            }
         }
         return config;
     }
