@@ -632,11 +632,18 @@ public final class AetherVpnService extends VpnService {
               //     proxy whose tunnel is not up yet fails the rung outright.
               //  3. Psiphon last. The bridge attaches from its own onConnected(),
               //     so device traffic only ever reaches a tunnel that is carrying.
-              if (!establishVpn(request, session)) return false;
-              // Mark the request as a chain before the inner legs start, so
-              // buildCoreEnv moves their SOCKS listener to 1820 rather than
-              // 1819 — where Psiphon's own listener is about to bind.
+              // Mark the request as a chain BEFORE the TUN is established, not
+              // after. establishVpn reads the flag to decide whether to attach
+              // the bridge at all, so setting it afterwards meant the bridge
+              // started immediately — against 1819, the default, with udp: udp —
+              // and then attachChainBridge's TProxyStartService was a no-op
+              // because upstream refuses to start a second bridge while one
+              // exists. The first bridge kept running, pointed at whatever
+              // landed on 1819, which is Psiphon. That is the whole of the
+              // 0x03 flood: Psiphon's SOCKS answering a UDP ASSOCIATE that
+              // survived from a config written for a session that had no chain.
               request.putExtra(EXTRA_CHAIN_LEG, true);
+              if (!establishVpn(request, session)) return false;
               if (!startSiphonChain(request, session)) return false;
               sendLog("Performance psiphon_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
           } else {

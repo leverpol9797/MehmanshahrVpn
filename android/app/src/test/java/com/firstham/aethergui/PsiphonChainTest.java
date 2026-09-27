@@ -251,6 +251,31 @@ public final class PsiphonChainTest {
     }
 
     /**
+     * The chain flag is set before the TUN is established, not after.
+     *
+     * establishVpn reads that flag to decide whether to attach the bridge. Set
+     * it afterwards and the bridge attaches at once — against 1819, the default,
+     * with udp: udp — and then attachChainBridge's start is a no-op, because
+     * upstream refuses to run two bridges at once. The first one survives,
+     * pointing at whatever bound 1819, which is Psiphon, and a CONNECT-only
+     * listener answers its UDP ASSOCIATE with 0x03 forever.
+     *
+     * The two failures are indistinguishable from the log: a tunnel that
+     * publishes connected, resolves nothing, and scrolls warnings.
+     */
+    @Test public void theChainIsMarkedBeforeTheTunIsBuilt() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int mark = source.indexOf("putExtra(EXTRA_CHAIN_LEG, true)");
+        int establish = source.indexOf("if (!establishVpn(request, session)) return false;",
+                mark - 4000);
+        assertTrue("both calls must be in the connect path", mark > 0 && establish > 0);
+        assertTrue("the flag has to be set first: establishVpn reads it to decide "
+                        + "whether to attach the bridge at all",
+                mark < establish);
+    }
+
+    /**
      * A chain tunnels UDP over TCP, because Psiphon's SOCKS speaks CONNECT only.
      *
      * hev's socks5.udp is a client-side choice: "udp" makes it open a SOCKS5 UDP
