@@ -93,6 +93,24 @@ public final class AetherVpnService extends VpnService {
      * waits its whole timeout on a port the core never opened while the port it
      * did open goes unreferenced.
      */
+    /**
+     * How the bridge should carry UDP to this session's SOCKS server.
+     *
+     * HEV's socks5.udp is "udp" or "tcp", and it is the client's choice, not the
+     * server's: "udp" makes HEV open a SOCKS5 UDP ASSOCIATE, which is command
+     * 0x03. The Aether core grants that. Psiphon does not — its SOCKS listener
+     * answers CONNECT only, and the field log filled with "socks5ReadCommand:
+     * SOCKS message field command was 0x03, not 0x01", hundreds of times, with
+     * name resolution as the traffic behind it.
+     *
+     * So a chain tunnels UDP over TCP. That is slower per byte and costs nothing
+     * in practice, because a SOCKS5 upstream cannot carry a UDP associate anyway
+     * — which is also why Psiphon stops offering QUIC-OSSH on this leg.
+     */
+    private static String socksUdpMode(Intent request) {
+        return request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false) ? "tcp" : "udp";
+    }
+
     private static String coreSocksAddress(Intent request) {
         if (request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
             return SiphonChain.chainSocksAddress();
@@ -2207,7 +2225,7 @@ public final class AetherVpnService extends VpnService {
             writer.write("socks5:\n");
             writer.write("  address: '" + yamlEscape(socks.host) + "'\n");
             writer.write("  port: " + socks.port + "\n");
-            writer.write("  udp: 'udp'\n");
+            writer.write("  udp: '" + socksUdpMode(request) + "'\n");
         }
         return config;
     }
@@ -2783,7 +2801,7 @@ public final class AetherVpnService extends VpnService {
                 // carrying. Established earlier it would point at the core's
                 // 1820 with nothing behind it, and the session would publish
                 // "connected" while every packet went nowhere.
-                attachChainBridge(session);
+                attachChainBridge(request, session);
                 return isCurrentSession(request, session) && bridgeStarted;
             }
             // A chosen country that will not come up is worth one retry without
@@ -2862,7 +2880,7 @@ public final class AetherVpnService extends VpnService {
      * than rejected: the first field run bound 43471 while the bridge was
      * configured for 1819, and the session reported connected and exited in Iran.
      */
-    private void attachChainBridge(long session) throws Exception {
+    private void attachChainBridge(Intent request, long session) throws Exception {
         int port = siphonChain.readyPort();
         if (port <= 0) throw new IllegalStateException("Psiphon has no SOCKS port to bridge to");
         sendLog("Chain: bridging the TUN to Psiphon on 127.0.0.1:" + port);
@@ -2878,7 +2896,7 @@ public final class AetherVpnService extends VpnService {
         }
         // Rebuild the TUN config against Psiphon's port and restart the bridge on
         // the descriptor that was established before Psiphon started.
-        File config = writeTunConfig(activeRequest, "127.0.0.1:" + port);
+        File config = writeTunConfig(request, "127.0.0.1:" + port);
         try {
             TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
         } catch (UnsatisfiedLinkError error) {

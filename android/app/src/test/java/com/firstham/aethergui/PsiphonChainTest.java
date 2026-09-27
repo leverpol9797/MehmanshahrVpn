@@ -246,8 +246,33 @@ public final class PsiphonChainTest {
                 source.contains("boolean attachBridge"));
         assertTrue("and a chain must pass false",
                 source.contains("!request.getBooleanExtra(EXTRA_CHAIN_LEG, false)"));
-        int attach = source.indexOf("attachChainBridge(session)");
+        int attach = source.indexOf("attachChainBridge(request, session)");
         assertTrue("the chain must attach the bridge from its own path", attach > 0);
+    }
+
+    /**
+     * A chain tunnels UDP over TCP, because Psiphon's SOCKS speaks CONNECT only.
+     *
+     * hev's socks5.udp is a client-side choice: "udp" makes it open a SOCKS5 UDP
+     * ASSOCIATE, which is command 0x03. The Aether core grants it; Psiphon does
+     * not, and answered hundreds of times per minute:
+     *
+     *   SOCKS proxy accept error: socks5ReadCommand: SOCKS message field
+     *   command was 0x03, not 0x01
+     *
+     * The traffic behind it was name resolution, so the visible symptom was a
+     * tunnel that reported connected and resolved nothing.
+     */
+    @Test public void aChainNeverAsksForUdpAssociate() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        assertTrue("the mode must be chosen from the chain flag",
+                source.contains("EXTRA_CHAIN_LEG, false) ? \"tcp\" : \"udp\""));
+        assertTrue("and written into the hev config", source.contains("socksUdpMode(request)"));
+        // The core keeps UDP: it is the only upstream that grants 0x03, and the
+        // non-chained sessions have always relied on it for DNS.
+        assertFalse("the bare default must not be hardcoded over the computed mode",
+                source.contains("writer.write(\"  udp: 'udp'\\n\")"));
     }
 
     @Test public void cdnFrontingIsOptIn() {
