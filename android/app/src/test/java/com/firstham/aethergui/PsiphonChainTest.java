@@ -183,6 +183,37 @@ public final class PsiphonChainTest {
         assertTrue("but it must still be chained", retry.contains("UpstreamProxyURL"));
     }
 
+    /**
+     * The config carries every key Psiphon's Commit insists on.
+     *
+     * PropagationChannelId is the one it named: "psi.Start#255:
+     * psiphon.(*Config).Commit#1665: propagation channel ID is missing from the
+     * configuration file" — and it rejected the whole config, so nothing about
+     * the chain was tested by that run.
+     */
+    @Test public void theConfigHasTheKeysCommitRefusesToStartWithout() {
+        String config = PsiphonTunnelRunner.configJson(null, false);
+        assertTrue("propagation channel", config.contains("\"PropagationChannelId\""));
+        assertTrue("sponsor", config.contains("\"SponsorId\""));
+        assertTrue("server entry signing key",
+                config.contains("\"ServerEntrySignaturePublicKey\""));
+        assertTrue("remote list signing key",
+                config.contains("\"RemoteServerListSignaturePublicKey\""));
+        assertTrue("exchange obfuscation key", config.contains("\"ExchangeObfuscationKey\""));
+        // Empty strings, not absent: omitted, Psiphon fetches a remote server
+        // list through the upstream proxy, which is one more request for a
+        // carrier to block.
+        assertTrue(config.contains("\"RemoteServerListURL\":\"\""));
+        assertTrue(config.contains("\"TunnelProtocol\":\"\""));
+    }
+
+    @Test public void theConfigDeclaresIranSoItsTacticsAreUsed() {
+        // Psiphon downloads region-specific tactics and applies them in place of
+        // the defaults. Without this it runs the default protocol set against a
+        // carrier that needs the specialised one.
+        assertTrue(PsiphonTunnelRunner.configJson(null, false).contains("\"DeviceRegion\":\"IR\""));
+    }
+
     @Test public void cdnFrontingIsOptIn() {
         assertTrue(!PsiphonTunnelRunner.configJson(null, false).contains("FrontedMeekCDNScan"));
         assertTrue(PsiphonTunnelRunner.configJson(null, true).contains("FrontedMeekCDNScan"));

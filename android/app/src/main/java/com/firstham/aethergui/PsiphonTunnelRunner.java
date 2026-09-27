@@ -45,6 +45,33 @@ public final class PsiphonTunnelRunner {
 
     public static final int SOCKS_PORT = 1819;
 
+    /**
+     * psiphon-tunnel-core's own published signing keys, unchanged.
+     *
+     * They verify the server list and the remote list; the embedded entries in
+     * assets/server_entries.txt are signed with the first of them, so replacing
+     * either with a value of our own would make every entry fail verification and
+     * leave the tunnel with nothing to connect to.
+     */
+    private static final String SERVER_ENTRY_SIGNING_KEY =
+            "sHuUVTWaRyh5pZwy4UguSgkwmBe0EHtJJkoF5WrxmvA=";
+
+    private static final String EXCHANGE_KEY =
+            "DpXzloJk1Hw6aSzmKKky0xcahsEHubch81Mi6K0XMlU=";
+
+    private static final String REMOTE_LIST_SIGNING_KEY =
+            "MIICIDANBgkqhkiG9w0BAQEFAAOCAg0AMIICCAKCAgEAt7Ls+/39r+T6zNW7GiVpJfzq/xvL"
+            + "9SBH5rIFnk0RXYEYavax3WS6HOD35eTAqn8AniOwiH+DOkvgSKF2caqk/y1dfq47Pdymtwzp"
+            + "9ikpB1C5OfAysXzBiwVJlCdajBKvBZDerV1cMvRzCKvKwRmvDmHgphQQ7WfXIGbRbmmk6opM"
+            + "Bh3roE42KcotLFtqp0RRwLtcBRNtCdsrVsjiI1Lqz/lH+T61sGjSjQ3CHMuZYSQJZo/Krvzg"
+            + "QXpkaCTdbObxHqb6/+i1qaVOfEsvjoiyzTxJADvSytVtcTjijhPEV6XskJVHE1Zgl+7rATr/"
+            + "pDQkw6DPCNBS1+Y6fy7GstZALQXwEDN/qhQI9kWkHijT8ns+i1vGg00Mk/6J75arLhqcodWs"
+            + "deG/M/moWgqQAnlZAGVtJI1OgeF5fsPpXu4kctOfuZlGjVZXQNW34aOzm8r8S0eVZitPlbhc"
+            + "PiR4gT/aSMz/wd8lZlzZYsje/Jr8u/YtlwjjreZrGRmG8KMOzukV3lLmMppXFMvl4bxv6YFE"
+            + "mIuTsOhbLTwFgh7KYNjodLj/LsqRVfwz31PgWQFTEPICV7GCvgVlPRxnofqKSjgTWI4mxDhB"
+            + "pVcATvaoBl1L/6WLbFvBsoAUBItWwctO2xalKxF5szhGm8lccoc5MZr8kfE0uxMgsxz4er68"
+            + "iCID+rsCAQM=";
+
     /** The part of the chain this class reports back to. */
     public interface Listener {
         /** Psiphon has a usable SOCKS listener on {@code port}. */
@@ -129,10 +156,43 @@ public final class PsiphonTunnelRunner {
     static String configJson(String country, boolean cdnFronting) {
         StringBuilder json = new StringBuilder();
         json.append('{');
-        json.append("\"UpstreamProxyURL\":\"socks5://127.0.0.1:").append(CHAIN_SOCKS_PORT).append('"');
-        json.append(",\"LocalSocksPort\":").append(SOCKS_PORT);
+        // Psiphon's Config.Commit rejects the whole config without a propagation
+        // channel, so this is not optional and there is no default: the field log
+        // showed "psi.Start#255: ... propagation channel ID is missing from the
+        // configuration file" and no tunnel at all. All F's is a valid, deliberately
+        // unowned channel — a real one would report this app's users to whoever
+        // owns it, which is not something an app can do on their behalf.
+        json.append("\"PropagationChannelId\":\"FFFFFFFFFFFFFFFF\"");
+        json.append(",\"SponsorId\":\"1111111111111111\"");
+        // The three keys below are psiphon-tunnel-core's own published defaults.
+        // Omitting RemoteServerListURL and TunnelProtocol entirely means Psiphon
+        // fetches a remote list over the upstream proxy, which is a request it
+        // makes through the chain and one more thing a carrier can block; the
+        // empty string is the documented way to use only the embedded entries.
+        json.append(",\"RemoteServerListURL\":\"\"");
+        json.append(",\"TunnelProtocol\":\"\"");
+        json.append(",\"ServerEntrySignaturePublicKey\":\"").append(SERVER_ENTRY_SIGNING_KEY).append('"');
+        json.append(",\"RemoteServerListSignaturePublicKey\":\"")
+                .append(REMOTE_LIST_SIGNING_KEY).append('"');
+        json.append(",\"ExchangeObfuscationKey\":\"").append(EXCHANGE_KEY).append('"');
+        json.append(",\"ClientVersion\":\"1\"");
+        json.append(",\"EstablishTunnelTimeoutSeconds\":120");
+        // Tells Psiphon the user is in Iran, so the Iran-specific tactics —
+        // protocol selection, padding, server prioritisation — are downloaded and
+        // applied rather than the defaults being used against a carrier that needs
+        // the specialised set.
+        json.append(",\"DeviceRegion\":\"IR\"");
+        // More workers means more simultaneous candidate dials, which is the
+        // difference between finding a server that survives DPI and giving up
+        // after a handful. Twelve is what MSN-GUARD measured useful on a
+        // restrictive SIM; the Go default is four.
+        json.append(",\"ConnectionWorkerPoolSize\":12");
+        json.append(",\"EmitBytesTransferred\":true");
         json.append(",\"EmitDiagnosticNotices\":true");
         json.append(",\"UseIndistinguishableTLS\":true");
+
+        json.append(",\"UpstreamProxyURL\":\"socks5://127.0.0.1:").append(CHAIN_SOCKS_PORT).append('"');
+        json.append(",\"LocalSocksPort\":").append(SOCKS_PORT);
         if (country != null) {
             // A hard filter: only that country's servers are candidates. Used
             // for one attempt and then dropped, so a country with no reachable
