@@ -163,7 +163,7 @@ public final class PsiphonChainTest {
                         + "and the WARP leg does nothing at all",
                 config.contains("\"UpstreamProxyURL\":\"socks5://127.0.0.1:1820\""));
         assertTrue("the SOCKS port must be fixed, not chosen by Psiphon",
-                config.contains("\"LocalSocksPort\":1819"));
+                config.contains("\"LocalSocksProxyPort\":1819"));
     }
 
     @Test public void theChosenCountryIsAHardFilter() {
@@ -212,6 +212,42 @@ public final class PsiphonChainTest {
         // the defaults. Without this it runs the default protocol set against a
         // carrier that needs the specialised one.
         assertTrue(PsiphonTunnelRunner.configJson(null, false).contains("\"DeviceRegion\":\"IR\""));
+    }
+
+    /**
+     * The port key is LocalSocksProxyPort, and it is the only one that is.
+     *
+     * "LocalSocksPort" does not exist in libgojni.so, and a key the Go config
+     * does not know is ignored rather than rejected — so Psiphon bound an
+     * arbitrary port (43471) while the bridge was configured for 1819. The
+     * session reported connected, the location probe came back IR, and nothing
+     * told either fact was wrong. A test asserting the key exists cannot catch a
+     * typo in a key it never checks, so the count is over the string form.
+     */
+    @Test public void theSocksPortKeyIsTheOneThatExists() {
+        String config = PsiphonTunnelRunner.configJson(null, false);
+        assertTrue("the Go config spells it LocalSocksProxyPort",
+                config.contains("\"LocalSocksProxyPort\":" + PsiphonTunnelRunner.SOCKS_PORT));
+        assertFalse("LocalSocksPort is silently ignored, not rejected",
+                config.contains("\"LocalSocksPort\""));
+    }
+
+    /**
+     * The bridge is attached after Psiphon, not when the TUN is established.
+     *
+     * The TUN must exist first — Psiphon's NetworkMonitor restarts the controller
+     * when tun0 appears — but the bridge must not attach until there is a port
+     * that carries, or it points at the core's 1820 with nothing behind it.
+     */
+    @Test public void aChainedSessionDefersTheBridgeUntilPsiphonHasAPort() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        assertTrue("establishVpn must take a flag saying whether to attach",
+                source.contains("boolean attachBridge"));
+        assertTrue("and a chain must pass false",
+                source.contains("!request.getBooleanExtra(EXTRA_CHAIN_LEG, false)"));
+        int attach = source.indexOf("attachChainBridge(session)");
+        assertTrue("the chain must attach the bridge from its own path", attach > 0);
     }
 
     @Test public void cdnFrontingIsOptIn() {

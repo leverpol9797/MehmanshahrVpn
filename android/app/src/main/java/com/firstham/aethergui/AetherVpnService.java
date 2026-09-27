@@ -1197,6 +1197,23 @@ public final class AetherVpnService extends VpnService {
     }
 
     private boolean establishVpn(Intent request, long session) throws Exception {
+        return establishVpn(request, session, !request.getBooleanExtra(EXTRA_CHAIN_LEG, false));
+    }
+
+    /**
+     * Build the TUN, and attach the bridge only when this session is not a chain.
+     *
+     * The split is the chain's whole shape. The TUN has to exist before Psiphon
+     * starts — Psiphon's NetworkMonitor reads tun0 appearing as a network change
+     * and restarts the controller — but the bridge must not attach until Psiphon
+     * has its own listener, because attaching earlier points the bridge at
+     * whichever port exists now rather than the one that ends up carrying. In
+     * the field that was the core's 1820 with nothing on the far side of it: the
+     * tunnel published "connected" and the location probe came back IR, straight
+     * off the carrier.
+     */
+    private boolean establishVpn(Intent request, long session, boolean attachBridge)
+            throws Exception {
         // IPv6 is captured unconditionally. The TUN and its route table are built exactly once per
         // session and are never rebuilt on a network change - recovery only restarts the Aether core
         // - so deciding capture from the network that happens to be up at establish() time left a
@@ -1253,25 +1270,32 @@ public final class AetherVpnService extends VpnService {
             }
             // A bridge stop that overran its bound leaves the previous tunnel worker alive, and
             // upstream TProxyStartService is a no-op while one exists. Starting on top of it would
-            // publish a tunnel that silently carries nothing, so fail the attempt explicitly.
-            if (!awaitBridgeHandover()) {
-                throw new IllegalStateException("The previous tunnel bridge has not shut down yet");
+            if (attachBridge) {
+                // publish a tunnel that silently carries nothing, so fail the attempt explicitly.
+                if (!awaitBridgeHandover()) {
+                    throw new IllegalStateException("The previous tunnel bridge has not shut down yet");
+                }
+                try {
+                    TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
+                } catch (UnsatisfiedLinkError error) {
+                    throw new IllegalStateException("The HEV Android JNI bridge could not be loaded", error);
+                }
+                boolean orphaned;
+                synchronized (runtimeLock) {
+                    // A teardown replaced or cleared the descriptor while the bridge was starting; the
+                    // bridge it just attached to is now orphaned and has to be stopped here.
+                    orphaned = vpnInterface != descriptor;
+                    if (!orphaned) bridgeStarted = true;
+                }
+                // Deliberately outside runtimeLock, for the reason stopBridge() documents.
+                if (orphaned) { stopBridge(); return false; }
+                sendLog("HEV Android TUN bridge started");
+                return isCurrentSession(request, session);
             }
-            try {
-                TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
-            } catch (UnsatisfiedLinkError error) {
-                throw new IllegalStateException("The HEV Android JNI bridge could not be loaded", error);
-            }
-            boolean orphaned;
-            synchronized (runtimeLock) {
-                // A teardown replaced or cleared the descriptor while the bridge was starting; the
-                // bridge it just attached to is now orphaned and has to be stopped here.
-                orphaned = vpnInterface != descriptor;
-                if (!orphaned) bridgeStarted = true;
-            }
-            // Deliberately outside runtimeLock, for the reason stopBridge() documents.
-            if (orphaned) { stopBridge(); return false; }
-            sendLog("HEV Android TUN bridge started");
+            // A chain has no bridge yet. startSiphonChain attaches it once
+            // Psiphon reports its own listener, which is the only port that
+            // carries, so the TUN exists at this point and nothing is attached
+            // to it. That is deliberate and is why the interface is not rebuilt.
             return isCurrentSession(request, session);
         } finally {
             if (!adopted) {
@@ -2151,7 +2175,20 @@ public final class AetherVpnService extends VpnService {
     }
 
     private File writeTunConfig(Intent request) throws Exception {
-        HostPort socks = HostPort.parse(coreSocksAddress(request));
+        return writeTunConfig(request, coreSocksAddress(request));
+    }
+
+    /**
+     * Write the HEV config against an explicit upstream.
+     *
+     * The chain needs this: the bridge is configured once, when the TUN is
+     * established, and at that moment the only port that exists is the core's.
+     * By the time Psiphon is up the bridge has to be pointed at a different one,
+     * which means rewriting the same file and restarting the bridge on the same
+     * descriptor.
+     */
+    private File writeTunConfig(Intent request, String socksAddress) throws Exception {
+        HostPort socks = HostPort.parse(socksAddress);
         File config = new File(getCacheDir(), "hev.yml");
         try (FileWriter writer = new FileWriter(config, false)) {
             writer.write("misc:\n");
@@ -2741,7 +2778,14 @@ public final class AetherVpnService extends VpnService {
         long deadline = SystemClock.elapsedRealtime() + PSIPHON_TIMEOUT_MS;
         while (SystemClock.elapsedRealtime() < deadline) {
             if (!isCurrentSession(request, session)) return false;
-            if (siphonChain.readyPort() > 0) return true;
+            if (siphonChain.readyPort() > 0) {
+                // The bridge attaches here, on the port that is actually
+                // carrying. Established earlier it would point at the core's
+                // 1820 with nothing behind it, and the session would publish
+                // "connected" while every packet went nowhere.
+                attachChainBridge(session);
+                return isCurrentSession(request, session) && bridgeStarted;
+            }
             // A chosen country that will not come up is worth one retry without
             // the filter, not an outright failure.
             if (siphonChain.countryAttemptExpired()
@@ -2804,6 +2848,52 @@ public final class AetherVpnService extends VpnService {
             }
         }
         return false;
+    }
+
+    /**
+     * Attach the HEV bridge to Psiphon's SOCKS listener.
+     *
+     * Psiphon is the outer leg, so the bridge — which is what carries device
+     * traffic off the TUN — has to point at Psiphon's port and nothing else. The
+     * core's 1820 is underneath and is not a path the device's traffic can take.
+     *
+     * The config is written with the port Psiphon reported rather than the one
+     * we asked for, because a config key that does not exist is ignored rather
+     * than rejected: the first field run bound 43471 while the bridge was
+     * configured for 1819, and the session reported connected and exited in Iran.
+     */
+    private void attachChainBridge(long session) throws Exception {
+        int port = siphonChain.readyPort();
+        if (port <= 0) throw new IllegalStateException("Psiphon has no SOCKS port to bridge to");
+        sendLog("Chain: bridging the TUN to Psiphon on 127.0.0.1:" + port);
+        if (!awaitBridgeHandover()) {
+            throw new IllegalStateException("The previous tunnel bridge has not shut down yet");
+        }
+        ParcelFileDescriptor descriptor;
+        synchronized (runtimeLock) {
+            descriptor = vpnInterface;
+        }
+        if (descriptor == null) {
+            throw new IllegalStateException("The VPN interface is gone before the bridge attached");
+        }
+        // Rebuild the TUN config against Psiphon's port and restart the bridge on
+        // the descriptor that was established before Psiphon started.
+        File config = writeTunConfig(activeRequest, "127.0.0.1:" + port);
+        try {
+            TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
+        } catch (UnsatisfiedLinkError error) {
+            throw new IllegalStateException("The HEV Android JNI bridge could not be loaded", error);
+        }
+        boolean orphaned;
+        synchronized (runtimeLock) {
+            orphaned = vpnInterface != descriptor;
+            if (!orphaned) bridgeStarted = true;
+        }
+        if (orphaned) {
+            stopBridge();
+            throw new IllegalStateException("The VPN interface was replaced while bridging");
+        }
+        sendLog("HEV Android TUN bridge attached to Psiphon");
     }
 
     /** The hex-encoded embedded server list, or empty when none is bundled. */

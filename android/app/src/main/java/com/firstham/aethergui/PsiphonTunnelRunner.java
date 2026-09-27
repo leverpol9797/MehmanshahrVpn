@@ -192,7 +192,7 @@ public final class PsiphonTunnelRunner {
         json.append(",\"UseIndistinguishableTLS\":true");
 
         json.append(",\"UpstreamProxyURL\":\"socks5://127.0.0.1:").append(CHAIN_SOCKS_PORT).append('"');
-        json.append(",\"LocalSocksPort\":").append(SOCKS_PORT);
+        json.append(",\"LocalSocksProxyPort\":").append(SOCKS_PORT);
         if (country != null) {
             // A hard filter: only that country's servers are candidates. Used
             // for one attempt and then dropped, so a country with no reachable
