@@ -87,8 +87,16 @@ jobs:
             echo "::error::which Android refuses to install over any previous build."
             exit 1
           fi
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
-          echo "keystore decoded to $(wc -c < /tmp/release.jks) bytes"
+          # build.gradle reads the keystore from ANDROID_KEYSTORE_PATH, a file on
+          # disk, while the secret arrives base64. Decoding it into a file is the
+          # join between the two; without it the build sees no keystore and
+          # stops with "Release signing credentials are required".
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "keystore decoded to $(wc -c < "$RUNNER_TEMP/release.jks") bytes"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null \
+            || { echo "::error::the keystore does not open with these credentials"; exit 1; }
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - name: Build signed release APKs
         # assembleDebug, not assembleRelease-by-accident, but more to the point:
@@ -100,6 +108,10 @@ jobs:
         #
         # Signing has to come from a real keystore, held in secrets, and the
         # fingerprint has to be the same one forever or the same break returns.
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
           chmod +x gradlew
