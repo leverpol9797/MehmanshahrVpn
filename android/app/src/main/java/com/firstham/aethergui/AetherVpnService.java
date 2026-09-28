@@ -33,6 +33,8 @@ import java.io.OutputStream;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import javax.net.ssl.SNIHostName;
@@ -88,7 +90,35 @@ public final class AetherVpnService extends VpnService {
      * It has to match the mapdns.address in the bridge config, or the two disagree
      * and resolution fails in a way that looks like a dead tunnel.
      */
-    private static final String HEV_MAPPED_DNS = "198.18.0.2";
+    /**
+     * The TUN address plan, and the prefix is load-bearing.
+     *
+     * This was the bug behind "connected, but nothing works". The interface was
+     * 198.18.0.1/30, so the subnet was 198.18.0.0/30 and lwIP's own address fell
+     * outside it — and the failure mode is silence, exactly as MSN-GUARD's
+     * Tun2SocksManager warns in the class doc:
+     *
+     *   "Passing the interface address to runTun2Socks() instead of the router
+     *    address makes lwIP silently drop every packet."
+     *
+     * A /30 admits four addresses and cannot hold both ends of a point-to-point
+     * link plus the resolver. /8 over 10.0.0.0 holds all three with room to spare,
+     * which is why their PrivateAddress is ("10.0.0.1", "10.0.0.0", 8, "10.0.0.2").
+     *
+     * The session published connected, with a real German exit, because the
+     * traffic gate probes the SOCKS listener directly from this app and this app
+     * is excluded from the TUN. Nothing in that path touches the bridge, so a
+     * bridge that drops every packet looks identical to a healthy one.
+     */
+    private static final String HEV_TUN_ADDRESS = "10.0.0.1";
+    private static final int HEV_TUN_PREFIX = 8;
+    private static final String HEV_TUN_SUBNET = "10.0.0.0";
+    /** What lwIP answers on, and what the TUN names as its resolver. */
+    private static final String HEV_ROUTER_DNS = "10.0.0.2";
+    private static final String HEV_MAPDNS_NETWORK = "100.64.0.0";
+    private static final int HEV_MAPDNS_PREFIX = 10;
+    private static final String HEV_TUN_ADDRESS_V6 = "fc00::1";
+    private static final int HEV_TUN_PREFIX_V6 = 126;
 
     /**
      * The SOCKS address this request's core is publishing on.
@@ -1011,6 +1041,7 @@ public final class AetherVpnService extends VpnService {
 
     private boolean validateTrafficReady(Intent request, long session, long pipelineStarted, int attempts) throws Exception {
         String socks = deviceSocksAddress(request);
+        final boolean chainLeg = request.getBooleanExtra(EXTRA_CHAIN_LEG, false);
         Exception last = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             if (!isCurrentSession(request, session)) return false;
@@ -1025,7 +1056,19 @@ public final class AetherVpnService extends VpnService {
                 race.submit(() -> {
                     long started = SystemClock.elapsedRealtime();
                     try {
-                        String body = socksHttpGet(socks, host, path, TRAFFIC_READY_TIMEOUT_MS);
+                        // A chain's device traffic reaches the internet through the
+                        // TUN, and this app is excluded from it, so a direct SOCKS
+                        // dial proves the tunnel and nothing about the bridge.
+                        //
+                        // That gap is not theoretical. A /30 too small to hold the
+                        // bridge's own address published "connected" with a German
+                        // exit and dropped every packet — and this gate is what
+                        // called that a success. So on a chain the proof has to be
+                        // a real flow through 10.0.0.2, which only the bridge can
+                        // carry.
+                        String body = chainLeg
+                                ? tunTrafficProof(request, host, path, TRAFFIC_READY_TIMEOUT_MS)
+                                : socksHttpGet(socks, host, path, TRAFFIC_READY_TIMEOUT_MS);
                         if (body.trim().isEmpty()) throw new IllegalStateException("HTTPS response body was empty");
                     } catch (Exception error) {
                         throw new IllegalStateException("host=" + host + " " + safeMessage(error), error);
@@ -1291,11 +1334,13 @@ public final class AetherVpnService extends VpnService {
                 .setSession(getString(R.string.app_name))
                 .setMtu(effectiveMtu(request))
                 .setBlocking(false)
-                .addAddress("198.18.0.1", 30)
-                .addAddress("fc00::1", 126);
+                .addAddress(HEV_TUN_ADDRESS, HEV_TUN_PREFIX)
+                .addAddress(HEV_TUN_ADDRESS_V6, HEV_TUN_PREFIX_V6);
 
         String routing = value(request, "routing", "bypass-local");
-        if ("bypass-local".equals(routing)) addPublicRoutes(builder);
+        if ("bypass-local".equals(routing)) {
+            addPublicRoutes(builder, request.getBooleanExtra(EXTRA_CHAIN_LEG, false));
+        }
         else {
             builder.addRoute("0.0.0.0", 0);
             builder.addRoute("::", 0);
@@ -1312,7 +1357,7 @@ public final class AetherVpnService extends VpnService {
             // SOCKS5 command. 198.18.0.2 is answered inside the bridge and only leaves
             // as a real query on a cache miss.
             if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
-                builder.addDnsServer(HEV_MAPPED_DNS);
+                builder.addDnsServer(HEV_ROUTER_DNS);
             } else {
                 builder.addDnsServer("1.1.1.1").addDnsServer("1.0.0.1");
             }
@@ -2270,12 +2315,12 @@ public final class AetherVpnService extends VpnService {
             writer.write("  log-level: warn\n");
             writer.write("tunnel:\n");
             writer.write("  mtu: " + effectiveMtu(request) + "\n");
-            writer.write("  ipv4: 198.18.0.1\n");
+            writer.write("  ipv4: " + HEV_TUN_ADDRESS + "\n");
             // Always give HEV the IPv6 tunnel address. The TUN always carries IPv6 routes now, so
             // without this HEV cannot process those packets and they are silently dropped; with it
             // every IPv6 flow becomes a SOCKS5 CONNECT that either reaches the core's IPv6 exit or
             // fails fast enough for the client to fall back to IPv4.
-            writer.write("  ipv6: 'fc00::1'\n");
+            writer.write("  ipv6: '" + HEV_TUN_ADDRESS_V6 + "'\n");
             writer.write("  icmp: 'reply'\n");
             writer.write("socks5:\n");
             writer.write("  address: '" + yamlEscape(socks.host) + "'\n");
@@ -2301,7 +2346,7 @@ public final class AetherVpnService extends VpnService {
                 // use and 100.64.0.0/10 is the synthetic network it hands back, so
                 // nothing here can collide with a real route.
                 writer.write("mapdns:\n");
-                writer.write("  address: " + HEV_MAPPED_DNS + "\n");
+                writer.write("  address: " + HEV_ROUTER_DNS + "\n");
                 writer.write("  port: 53\n");
                 writer.write("  network: 100.64.0.0\n");
                 writer.write("  netmask: 255.192.0.0\n");
@@ -2309,6 +2354,40 @@ public final class AetherVpnService extends VpnService {
             }
         }
         return config;
+    }
+
+    /**
+     * An HTTPS GET whose only route to the internet is the TUN itself.
+     *
+     * The socket is deliberately NOT protected. protect() exempts a socket from
+     * the VPN, which is what every other probe in this service does, and here it
+     * is the opposite of what is wanted: the packet has to land on 10.0.0.2, be
+     * read by the bridge, and come back out of Psiphon. If the TUN, the subnet or
+     * the bridge is wrong, this times out and the session does not publish.
+     *
+     * It is also the only check that can catch a bridge which accepts a
+     * connection and carries nothing — which is precisely how a too-small subnet
+     * looks from every other angle in this file.
+     */
+    private String tunTrafficProof(Intent request, String host, String path, int timeoutMs)
+            throws Exception {
+        URL url = new URL("https://" + host + path);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setConnectTimeout(timeoutMs);
+        connection.setReadTimeout(timeoutMs);
+        connection.setInstanceFollowRedirects(false);
+        try {
+            int status = connection.getResponseCode();
+            InputStream body = status >= 400 ? connection.getErrorStream()
+                    : connection.getInputStream();
+            if (body == null) return String.valueOf(status);
+            byte[] buffer = new byte[256];
+            int read = body.read(buffer);
+            return read <= 0 ? String.valueOf(status) : new String(buffer, 0, read,
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private void applySplitApps(Builder builder, Intent request) {
@@ -2337,7 +2416,23 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
-    private void addPublicRoutes(Builder builder) {
+    private void addPublicRoutes(Builder builder, boolean chain) {
+        // HEV's own subnet has to come back, whatever the exclusions below say.
+        // bypass-local drops 10.0.0.0/8 as private space, and for a chain that
+        // space is the tunnel: 10.0.0.0/8 is the TUN itself, 10.0.0.2 is the
+        // resolver, and 100.64.0.0/10 is the range mapdns hands out as its fake
+        // answers. Lose the route and the resolver becomes unreachable, so a
+        // device that can reach the internet has no way to find an address worth
+        // reaching. MSN-GUARD says it as addRoute(subnet, prefixLength) next to
+        // addAddress — the subnet is not implied by the interface address.
+        builder.addRoute(HEV_TUN_SUBNET, HEV_TUN_PREFIX);
+        // mapdns answers with addresses in 100.64.0.0/10, and bypass-local treats
+        // that as CGNAT space and keeps it off the tunnel. On a chain that is the
+        // opposite of what is wanted: a lookup returns 100.64.0.x, the device
+        // sends to it, and with the range excluded the packet leaves the TUN and
+        // the answer is a timeout. The route is scoped to the chain because a
+        // direct session has no mapdns and some carriers genuinely use that range.
+        if (chain) builder.addRoute(HEV_MAPDNS_NETWORK, HEV_MAPDNS_PREFIX);
         List<Ipv4Range> excluded = new ArrayList<>();
         excluded.add(Ipv4Range.cidr("0.0.0.0", 8));
         excluded.add(Ipv4Range.cidr("10.0.0.0", 8));

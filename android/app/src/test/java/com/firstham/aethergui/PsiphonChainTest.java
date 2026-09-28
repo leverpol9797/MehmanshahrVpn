@@ -411,9 +411,8 @@ public final class PsiphonChainTest {
                 source.contains("writer.write(\"mapdns:\\n\")"));
         assertTrue("with a cache, or nothing ever resolves",
                 source.contains("cache-size:"));
-        assertTrue("and the TUN must point at the same address",
-                source.contains("builder.addDnsServer(HEV_MAPPED_DNS)"));
-        assertTrue("named once", source.contains("HEV_MAPPED_DNS = \"198.18.0.2\""));
+        assertTrue("and the TUN must name the same router address",
+                source.contains("builder.addDnsServer(HEV_ROUTER_DNS)"));
         // The direct sessions keep the public resolvers: the core grants UDP
         // ASSOCIATE, so 1.1.1.1 works there and is the right answer.
         assertTrue(source.contains("builder.addDnsServer(\"1.1.1.1\")"));
@@ -436,6 +435,56 @@ public final class PsiphonChainTest {
                 gate > 0 && off > gate && verify > off);
         assertTrue("and it has to come from the build flag",
                 source.contains("BuildConfig.LICENCE_GATE_DISABLED"));
+    }
+
+    /**
+     * The TUN subnet has to hold the bridge's own address.
+     *
+     * The interface was 198.18.0.1/30, so the subnet was 198.18.0.0/30 — four
+     * addresses, and lwIP's address fell outside it. Every packet was dropped,
+     * silently, which is what MSN-GUARD's Tun2SocksManager warns about in its
+     * class doc:
+     *
+     *   "Passing the interface address to runTun2Socks() instead of the router
+     *    address makes lwIP silently drop every packet."
+     *
+     * Their plan is ("10.0.0.1", "10.0.0.0", 8, "10.0.0.2"): /8, so the interface,
+     * the router and mapdns's 100.64.0.0/10 answers all have somewhere to live.
+     */
+    @Test public void theTunSubnetCanHoldTheBridge() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        assertTrue("a /30 cannot hold a point-to-point link plus the resolver",
+                source.contains("HEV_TUN_PREFIX = 8"));
+        assertTrue("and the router must be inside that subnet", source.contains(
+                "HEV_TUN_ADDRESS = \"10.0.0.1\"") && source.contains(
+                "HEV_ROUTER_DNS = \"10.0.0.2\"") && source.contains(
+                "HEV_TUN_SUBNET = \"10.0.0.0\""));
+        assertTrue("bypass-local excludes 10.0.0.0/8, so it has to be routed back in",
+                source.contains("builder.addRoute(HEV_TUN_SUBNET, HEV_TUN_PREFIX)"));
+    }
+
+    /**
+     * The traffic gate goes through the TUN on a chain.
+     *
+     * This app is excluded from the VPN, so a direct SOCKS dial proves the tunnel
+     * and nothing about the bridge. The too-small subnet was invisible to it —
+     * that is how a dead bridge published connected with a real German exit — so
+     * on a chain the proof has to be a flow only the bridge can carry, and that
+     * means a socket this app deliberately does not protect.
+     */
+    @Test public void aChainedGateTestsTheBridgeItself() throws Exception {
+        String source = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int gate = source.indexOf("private boolean validateTrafficReady(");
+        int body = source.indexOf("tunTrafficProof(request, host", gate);
+        int socks = source.indexOf("socksHttpGet(socks, host", gate);
+        assertTrue("a chain must take the TUN path", body > gate);
+        assertTrue("and a direct session must keep the SOCKS one", socks > gate);
+        assertTrue("the TUN proof must not protect its socket",
+                source.contains("tunTrafficProof") && !source.contains(
+                        "tunTrafficProof(Context context, String host, String path, int timeoutMs)\n"
+                                + "            throws Exception {\n        try {\n            VpnService"));
     }
 
     @Test public void cdnFrontingIsOptIn() {
