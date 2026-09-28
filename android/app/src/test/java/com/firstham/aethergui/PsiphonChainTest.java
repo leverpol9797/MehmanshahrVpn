@@ -554,6 +554,35 @@ public final class PsiphonChainTest {
         }
     }
 
+    /**
+     * CI ships a signed release, not a debug build.
+     *
+     * Every APK from 2.4.2 to 2.5.0 was signed with a throwaway debug key, which
+     * Gradle regenerates per machine, so no two of them shared a signature.
+     * Android's answer to that is INSTALL_FAILED_UPDATE_INCOMPATIBLE and a
+     * prompt to uninstall — which wipes the stored licence, so the user has to
+     * buy again. Nothing in the build failed; it was published repeatedly.
+     *
+     * Three things have to hold, and each has broken on its own here: the task
+     * must be a release, the signing secrets must be checked before the build
+     * rather than after, and the artifact's own certificate must be inspected
+     * before it is published.
+     */
+    @Test public void ciPublishesASignedRelease() throws Exception {
+        String workflow = read("..", "..", ".github", "workflows", "build-android.yml");
+        assertTrue("the build must be a release build",
+                workflow.contains("./gradlew assembleRelease"));
+        assertFalse("a debug build is signed with a key nobody keeps — that was the bug",
+                workflow.contains("./gradlew assembleDebug"));
+        assertTrue("and the output must be read from the release directory",
+                workflow.contains("android/app/build/outputs/apk/release"));
+        assertTrue("missing secrets must fail the build, not produce an unsigned APK",
+                workflow.contains("ANDROID_KEYSTORE_BASE64")
+                        && workflow.contains("exit 1"));
+        assertTrue("and the published artifact's certificate has to be checked",
+                workflow.contains("apksigner") && workflow.contains("CN=Android Debug"));
+    }
+
     @Test public void cdnFrontingIsOptIn() {
         assertTrue(!PsiphonTunnelRunner.configJson(null, false).contains("FrontedMeekCDNScan"));
         assertTrue(PsiphonTunnelRunner.configJson(null, true).contains("FrontedMeekCDNScan"));

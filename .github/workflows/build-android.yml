@@ -65,11 +65,45 @@ jobs:
           path: android/app/build/reports/tests/
           if-no-files-found: ignore
 
-      - name: Build Android Debug APKs
+      - name: Check signing secrets
+        # A release that cannot be signed must fail here, loudly, rather than
+        # quietly producing something installable only after a wipe. The
+        # fingerprint of this keystore is what lets one build install over the
+        # next, and it cannot be recovered if the file is lost.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$ANDROID_KEYSTORE_BASE64" ] || missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -n "$ANDROID_KEYSTORE_PASSWORD" ] || missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$ANDROID_KEY_ALIAS" ] || missing="$missing ANDROID_KEY_ALIAS"
+          [ -n "$ANDROID_KEY_PASSWORD" ] || missing="$missing ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing signing secret(s):$missing"
+            echo "::error::Without these the build can only produce a debug-signed APK,"
+            echo "::error::which Android refuses to install over any previous build."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
+          echo "keystore decoded to $(wc -c < /tmp/release.jks) bytes"
+
+      - name: Build signed release APKs
+        # assembleDebug, not assembleRelease-by-accident, but more to the point:
+        # assembleDebug signs with a throwaway debug key that Gradle regenerates on
+        # every machine, so no two builds share a signature. Android then refuses
+        # to install one over the other with INSTALL_FAILED_UPDATE_INCOMPATIBLE,
+        # which is what users were hitting when 2.5.0 asked them to uninstall 2.4.2
+        # first — and uninstalling wipes the stored licence with it.
+        #
+        # Signing has to come from a real keystore, held in secrets, and the
+        # fingerprint has to be the same one forever or the same break returns.
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease --console=plain
 
       - name: Prepare Release APK Files
         run: |
@@ -80,7 +114,9 @@ jobs:
           echo "version from build.gradle: $VERSION"
           mkdir -p release_apks
           find android/app/build/outputs/apk -type f -name '*.apk' -print
-          apk_dir="android/app/build/outputs/apk/debug"
+          # release, not debug: assembleRelease writes here. Reading the wrong
+          # directory once published an empty release.
+          apk_dir="android/app/build/outputs/apk/release"
           for f in "$apk_dir"/*.apk; do
             [ -f "$f" ] || continue
             name=$(basename "$f")
@@ -96,6 +132,27 @@ jobs:
             fi
           done
           ls -la release_apks
+
+          # A published APK is signed with a throwaway debug key whenever the build
+          # task above is assembleDebug, and Gradle makes a new one per machine, so
+          # the symptom is INSTALL_FAILED_UPDATE_INCOMPATIBLE on the user's phone
+          # and a licence wiped by the uninstall that "fixes" it. Nothing in the
+          # build fails when that happens, so it is checked here, on the real
+          # artifact, before it can reach a release.
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then
+            APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          fi
+          for apk in release_apks/*.apk; do
+            echo "=== $apk"
+            "$APKSIGNER" verify --print-certs "$apk" | grep -iE "SHA-256 digest|certificate DN"
+            if "$APKSIGNER" verify --print-certs "$apk" | grep -q "CN=Android Debug"; then
+              echo "::error::$(basename "$apk") is signed with a throwaway debug key."
+              echo "::error::Android will refuse to install it over any earlier build."
+              exit 1
+            fi
+          done
+
           test -f release_apks/MehmanshahrVpn-v$VERSION-ARM64-v8a.apk
           test -f release_apks/MehmanshahrVpn-v$VERSION-ARMv7.apk
 
