@@ -18,10 +18,14 @@ plugins { id 'com.android.application' }
 // While this is true, any APK anyone downloads will run without paying. The
 // licence Worker, the Rubika bot and the approval flow are untouched; only the
 // app's refusal to start without a licence is switched off.
+//
+// The default is false, so a release enforces licensing. Testing a build still
+// means reinstalling, and an uninstall takes the stored licence with it, so the
+// flag is there for that: -PlicenceGateDisabled=true. Do not ship that.
 // ---------------------------------------------------------------------------------
 ext.licenceGateDisabled = project.hasProperty('licenceGateDisabled')
         ? project.property('licenceGateDisabled').toBoolean()
-        : true
+        : false
 
 dependencies {
     implementation 'androidx.core:core:1.15.0'
@@ -63,8 +67,8 @@ android {
         applicationId 'com.mehmanshahr.vpn'
         minSdk 26
         targetSdk 35
-        versionCode 42
-        versionName '2.4.16'
+        versionCode 43
+        versionName '2.5.0'
     }
 
     signingConfigs {

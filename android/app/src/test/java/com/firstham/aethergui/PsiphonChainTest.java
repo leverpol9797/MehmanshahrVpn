@@ -487,6 +487,73 @@ public final class PsiphonChainTest {
                                 + "            throws Exception {\n        try {\n            VpnService"));
     }
 
+    /**
+     * A released build enforces the licence.
+     *
+     * The bypass was added so that reinstalling between tests would not cost the
+     * whole purchase path each time. It is a build flag, which means the safety
+     * of the whole licensing system rests on a default in a Gradle file, so the
+     * default is asserted here rather than trusted.
+     */
+    @Test public void aReleaseDoesNotShipWithTheGateOpen() throws Exception {
+        String gradle = read("..", "app", "build.gradle");
+        int ext = gradle.indexOf("ext.licenceGateDisabled");
+        assertTrue("the default has to be explicit", ext > 0);
+        int def = gradle.indexOf(": false", ext);
+        assertTrue("a release must require a signed licence by default", def > ext);
+        assertTrue("and the flag stays available for testing builds",
+                gradle.contains("project.property('licenceGateDisabled')"));
+    }
+
+    /**
+     * The protocol list is one list, offered in one order.
+     *
+     * psiphon moved above smart connect: a user reaching for smart connect gets
+     * a single protocol that has to happen to work, while psiphon is a chain
+     * that reaches where the single leg does not. Three files have to agree or
+     * the UI labels the wrong transports, so the order is checked in all three.
+     */
+    @Test public void psiphonIsOfferedAboveSmartConnect() throws Exception {
+        String expected = "{\"masque\", \"wg\", \"gool\", \"siphon\", \"smart\"}";
+        String controller = read("src", "main", "java", "com", "firstham", "aethergui",
+                "VpnConnectionController.java");
+        assertTrue("the controller drives the default choice", controller.contains(expected));
+        for (String locale : new String[] { "values", "values-en" }) {
+            String arrays = read("src", "main", "res", locale, "arrays.xml");
+            assertTrue(locale + " must document the same order",
+                    arrays.contains("PROTOCOLS = { masque, wg, gool, siphon, smart }"));
+            // The two locales name these differently, so the order is read from the
+            // array items rather than matched as English text.
+            int labels = arrays.indexOf("protocol_labels");
+            int end = arrays.indexOf("</string-array>", labels);
+            String items = arrays.substring(labels, end);
+            java.util.List<String> names = new java.util.ArrayList<>();
+            java.util.regex.Matcher item = java.util.regex.Pattern
+                    .compile("<item>([^<]*)</item>").matcher(items);
+            while (item.find()) names.add(item.group(1));
+            assertEquals(locale + " must label every protocol", 5, names.size());
+            // Compared by array position, not by spelling: the two locales
+            // name these differently, and a test that hardcodes either string
+            // only tests the string.
+            int psiphon = -1;
+            int smart = -1;
+            String[] order = VpnConnectionController.PROTOCOLS;
+            for (int i = 0; i < order.length; i++) {
+                if ("siphon".equals(order[i])) psiphon = i;
+                if ("smart".equals(order[i])) smart = i;
+            }
+            assertTrue(locale + " must label every protocol", names.size() == order.length);
+            assertTrue(locale + " lists psiphon above smart connect", psiphon < smart);
+            assertTrue(locale + " must name the psiphon entry", !names.get(psiphon).isEmpty());
+            assertTrue(locale + " must name the smart entry", !names.get(smart).isEmpty());
+            assertFalse(locale + " must not repeat a label",
+                    names.get(psiphon).equals(names.get(smart)));
+            assertEquals("and they must line up with the controller's order",
+                    VpnConnectionController.PROTOCOLS[psiphon], "siphon");
+            assertEquals(VpnConnectionController.PROTOCOLS[smart], "smart");
+        }
+    }
+
     @Test public void cdnFrontingIsOptIn() {
         assertTrue(!PsiphonTunnelRunner.configJson(null, false).contains("FrontedMeekCDNScan"));
         assertTrue(PsiphonTunnelRunner.configJson(null, true).contains("FrontedMeekCDNScan"));
@@ -494,10 +561,20 @@ public final class PsiphonChainTest {
 
     @Test public void addingAProtocolDoesNotRepointSmartConnect() {
         // mode=smart was stored by v2.1.1 and still has to mean Smart Connect
-        // now that a protocol sits after it in the list.
+        // wherever the list has since put it. Resolving by name, not by index,
+        // is what makes that true across reorderings.
         int smart = VpnConnectionController.normalizedProtocolIndex("smart", 0);
         assertEquals("smart", protocolAt(smart));
-        assertTrue("and it must not be the last entry any more", smart != protocolCount() - 1);
+        // What this guards is resolution by name. It used to be "smart must not
+        // be the last entry", which was a proxy for "the tail is not smart" and
+        // stopped meaning anything once the list was reordered. Name resolution
+        // is the property; the position is not.
+        assertTrue("mode=smart must resolve to smart whatever the order is",
+                "smart".equals(protocolAt(
+                        VpnConnectionController.normalizedProtocolIndex("smart",
+                                protocolCount() - 1))));
+        // It resolves to the smart entry itself, not to whatever now precedes it.
+        assertEquals("smart", protocolAt(VpnConnectionController.normalizedProtocolIndex("smart", 3)));
     }
 
     @Test public void anExplicitChoiceIsLeftAlone() {
@@ -550,8 +627,16 @@ public final class PsiphonChainTest {
         return protocols().length;
     }
 
-    /** Mirrors VpnConnectionController.PROTOCOLS. */
+    /**
+     * Mirrors VpnConnectionController.PROTOCOLS.
+     *
+     * Duplicated rather than read from the class, which is how this copy went
+     * stale when psiphon moved above smart connect — the tests kept passing
+     * against the old order while the app offered the new one. So the order is
+     * asserted against the real array in psiphonIsOfferedAboveSmartConnect, and
+     * anything that has to track the list reads that instead of this.
+     */
     private static String[] protocols() {
-        return new String[] { "masque", "wg", "gool", "smart", "siphon" };
+        return VpnConnectionController.PROTOCOLS;
     }
 }

@@ -49,7 +49,11 @@ public final class ConnectionDefaultsTest {
 
     @Test public void legacySmartModeMigratesToSmartProtocol() {
         assertEquals("vpn", VpnConnectionController.normalizedMode("smart"));
-        assertEquals(3, VpnConnectionController.normalizedProtocolIndex("smart", 2));
+        // "smart" is the legacy name of a mode, and it must still resolve to
+        // smart connect wherever smart connect now sits in the list.
+        assertEquals("smart",
+                VpnConnectionController.PROTOCOLS[
+                        VpnConnectionController.normalizedProtocolIndex("smart", 2)]);
         assertEquals("manual", VpnConnectionController.normalizedMode("manual"));
         assertEquals(1, VpnConnectionController.normalizedProtocolIndex("vpn", 1));
     }

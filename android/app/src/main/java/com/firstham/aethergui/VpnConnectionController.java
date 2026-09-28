@@ -8,7 +8,16 @@ import android.os.SystemClock;
 import androidx.core.content.ContextCompat;
 
 final class VpnConnectionController {
-    private static final String[] PROTOCOLS = {"masque", "wg", "gool", "smart", "siphon"};
+    /**
+     * Order is the order the UI offers, so psiphon sits above smart connect.
+     *
+     * A user who reaches for smart connect gets a single protocol that has to
+     * happen to work; psiphon is a two-leg chain that reaches on networks where
+     * the single leg does not, and it is now the one that has been proven. It
+     * sits third for the same reason wg and gool do — the list is the rungs of
+     * one ladder, so the order is preference, not dependence.
+     */
+    static final String[] PROTOCOLS = {"masque", "wg", "gool", "siphon", "smart"};
     private static final String[] SCANS = {"balanced", "turbo", "thorough", "stealth", "ironclad"};
     private static final String[] IP_MODES = {"v4", "v6", "both"};
     private static final String[] OBFUSCATION = {"firewall", "gfw", "balanced", "aggressive", "off"};
