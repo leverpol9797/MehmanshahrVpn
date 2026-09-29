@@ -2972,6 +2972,11 @@ public final class AetherVpnService extends VpnService {
         long deadline = SystemClock.elapsedRealtime() + PSIPHON_TIMEOUT_MS;
         while (SystemClock.elapsedRealtime() < deadline) {
             if (!isCurrentSession(request, session)) return false;
+            // The chain is gone as well as the session being over. stop() clears
+            // this, and without the check the loop would keep waiting on a
+            // SiphonChain whose runner is null, which is the state a disconnect
+            // leaves behind.
+            if (siphonChain.stopped()) return false;
             if (siphonChain.readyPort() > 0 && !bridgeStarted) {
                 // The bridge attaches on the port, because that is all it needs to
                 // be aimed somewhere real. Established earlier it would aim at the

@@ -583,6 +583,47 @@ public final class PsiphonChainTest {
                 workflow.contains("apksigner") && workflow.contains("CN=Android Debug"));
     }
 
+    /**
+     * A chain that finishes connecting after the user disconnected changes nothing.
+     *
+     * The button would stay on "connecting" after a disconnect, and pressing it
+     * again would disconnect rather than connect. Only siphon did it, because
+     * only siphon waits: startSiphonChain sleeps in a loop for as long as it
+     * takes Psiphon to find a server, tens of seconds, while the other protocols
+     * are finished in a couple.
+     *
+     * The Go library delivers onPsiphonConnected on its own goroutine, so it
+     * arrives after stop() has run and re-sets tunnelReady — and the wait loop,
+     * which only re-checks every 250ms, carries on with a chain whose runner is
+     * null. The service guards its own state writes with isCurrentSession, but
+     * SiphonChain owns tunnelReady and had no way to know the session was over.
+     */
+    @Test public void aStoppedChainIgnoresWhatArrivesAfterwards() throws Exception {
+        String chain = read("src", "main", "java", "com", "firstham", "aethergui",
+                "SiphonChain.java");
+        assertTrue("stop has to be visible across threads",
+                chain.contains("private volatile boolean stopped"));
+        assertTrue("and start has to clear it, or the next connect inherits the last one's",
+                chain.contains("stopped = false;"));
+        // Every callback that writes state has to be gated. tunnelReady and
+        // readyPort are what the wait loop reads, so an ungated one resurrects a
+        // chain the user already cancelled.
+        for (String callback : new String[] {
+                "onPsiphonReady(int port)", "onPsiphonConnected()", "onPsiphonExiting(String reason)" }) {
+            int at = chain.indexOf(callback);
+            int body = chain.indexOf("{", at);
+            int guard = chain.indexOf("if (stopped) return;", body);
+            assertTrue(callback + " must ignore a callback that arrives after stop()",
+                    at > 0 && guard > body);
+        }
+        // And the loop has to notice, not just the flag.
+        String service = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+        int loop = service.indexOf("siphonChain.start(entries)");
+        assertTrue("the wait loop must bail when the chain was stopped",
+                service.indexOf("siphonChain.stopped()", loop) > loop);
+    }
+
     @Test public void cdnFrontingIsOptIn() {
         assertTrue(!PsiphonTunnelRunner.configJson(null, false).contains("FrontedMeekCDNScan"));
         assertTrue(PsiphonTunnelRunner.configJson(null, true).contains("FrontedMeekCDNScan"));

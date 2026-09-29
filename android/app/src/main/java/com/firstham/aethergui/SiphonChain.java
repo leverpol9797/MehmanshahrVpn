@@ -58,6 +58,21 @@ final class SiphonChain {
     private final PsiphonTunnelRunner.Listener listener;
     private PsiphonTunnelRunner runner;
 
+    /**
+     * Set by stop(), cleared by start(). The Go library delivers its callbacks on
+     * its own goroutine, so a tunnel that finishes connecting after the user has
+     * disconnected still arrives — and it arrives second.
+     *
+     * That is why disconnecting a chain used to leave the button reading
+     * "connecting": stop() cleared tunnelReady, then onPsiphonConnected set it
+     * back a moment later, and runConnection — still inside its wait loop,
+     * because the loop only re-checks the session every 250ms — carried on as if
+     * nothing had happened. The service side guards its own state writes with
+     * isCurrentSession, but this class owns tunnelReady and had no way to know
+     * the session was over.
+     */
+    private volatile boolean stopped;
+
     /** The preferred country, or null for auto. Set once per session. */
     private String country;
     private boolean cdnFronting;
@@ -148,11 +163,13 @@ final class SiphonChain {
     void start(String serverEntries) {
         stop();
         countryAttemptDone = false;
+        stopped = false;
         readyPort = 0;
         tunnelReady = false;
         connected = false;
         runner = new PsiphonTunnelRunner(service, new PsiphonTunnelRunner.Listener() {
             @Override public void onPsiphonReady(int port) {
+                if (stopped) return;
                 readyPort = port;
                 listener.onPsiphonReady(port);
             }
@@ -167,12 +184,14 @@ final class SiphonChain {
             }
 
             @Override public void onPsiphonConnected() {
+                if (stopped) return;
                 tunnelReady = true;
                 connected = true;
                 listener.onPsiphonConnected();
             }
 
             @Override public void onPsiphonExiting(String reason) {
+                if (stopped) return;
                 connected = false;
                 listener.onPsiphonExiting(reason);
             }
@@ -215,7 +234,11 @@ final class SiphonChain {
         return System.currentTimeMillis() - countryAttemptStartedAt >= COUNTRY_ATTEMPT_MS;
     }
 
+    /** True once stop() has run, until start() runs again. */
+    boolean stopped() { return stopped; }
+
     void stop() {
+        stopped = true;
         if (runner != null) {
             runner.stop();
             runner = null;
