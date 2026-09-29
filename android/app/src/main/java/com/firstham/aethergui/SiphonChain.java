@@ -175,6 +175,7 @@ final class SiphonChain {
             }
 
             @Override public void onPsiphonConnecting() {
+                if (stopped) return;
                 if (country != null) {
                     countryAttemptStartedAt = System.currentTimeMillis();
                     service.sendLog("Psiphon trying " + PsiphonRegions.name(country)

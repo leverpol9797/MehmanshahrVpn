@@ -2805,13 +2805,30 @@ public final class AetherVpnService extends VpnService {
     }
 
     private void updateState(String state, String message) {
+        // A connecting state must never overwrite one the user has already moved
+        // past. The chain's callbacks come from Psiphon's goroutines and can
+        // arrive after a disconnect, and each one that slipped through left the
+        // button reading "connecting" over a tunnel that was already gone. The
+        // guards on the callbacks are the first line; this is the one that holds
+        // when a caller forgets them.
+        if (stopping && !"disconnected".equals(state) && !"error".equals(state)
+                && !"blocked".equals(state) && !"disconnecting".equals(state)) {
+            sendLog("Ignoring late state '" + state + "' — the session is stopping");
+            return;
+        }
         currentState = state;
         currentMessage = message == null ? "" : message;
         // The tile, widget, and activity all live in this process, so a live snapshot lets them read
         // the state the service is actually in rather than whatever SharedPreferences last flushed.
         LIVE_STATE.set(state);
+        // commit(), not apply(). A disconnect writes "disconnected" and then calls
+        // stopSelf(), so the process can be gone before an asynchronous write has
+        // reached disk — and the UI, reading the persisted state back on its next
+        // refresh, finds "connecting" instead. That is the second press not being
+        // needed: the fresh service instance writes it again, and this time the
+        // write survives, which is why the button only caught up on the tap after.
         stateStore.edit().putString("state", currentState).putString("message", currentMessage).putString("endpoint", currentEndpoint)
-                .putString("selectedProtocol", selectedProtocol).putBoolean("smartSelected", smartSelected).apply();
+                .putString("selectedProtocol", selectedProtocol).putBoolean("smartSelected", smartSelected).commit();
         sendStatus(currentState, currentMessage);
         MehmanshahrTileService.requestUpdate(this);
         MehmanshahrWidgetProvider.update(this);
@@ -2946,18 +2963,26 @@ public final class AetherVpnService extends VpnService {
         sendLog("Chain: " + chosen + " is the WARP leg, Psiphon rides on it");
 
         siphonChain = new SiphonChain(this, new PsiphonTunnelRunner.Listener() {
+            // Every callback here arrives on a Psiphon goroutine, and every one of
+            // them can land after the user has disconnected — the library keeps
+            // working until it is told to stop, and a chain can take tens of
+            // seconds to notice. A callback that writes state without checking
+            // is what left the button reading "connecting" over a tunnel that had
+            // already been torn down, so none of them write unguarded.
             @Override public void onPsiphonReady(int port) {
+                if (!isCurrentSession(request, session)) return;
                 sendLog("Psiphon SOCKS listening on 127.0.0.1:" + port);
             }
             @Override public void onPsiphonConnecting() {
+                if (!isCurrentSession(request, session)) return;
                 updateState("scanning", getString(R.string.service_psiphon_connecting));
             }
             @Override public void onPsiphonConnected() {
-                if (isCurrentSession(request, session)) {
-                    updateState("securing", getString(R.string.service_psiphon_connected));
-                }
+                if (!isCurrentSession(request, session)) return;
+                updateState("securing", getString(R.string.service_psiphon_connected));
             }
             @Override public void onPsiphonExiting(String reason) {
+                if (!isCurrentSession(request, session)) return;
                 sendLog("Psiphon chain stopped: " + reason);
             }
             @Override public void onPsiphonLog(String line) { }
@@ -3257,7 +3282,16 @@ public final class AetherVpnService extends VpnService {
         if (VpnConnectionController.canDisconnect(currentState)) {
             currentState = "disconnected";
             currentMessage = getString(R.string.service_disconnected);
-            stateStore.edit().putString("state", currentState).putString("message", currentMessage).putString("endpoint", "").apply();
+            // commit(), and broadcast, for the same reason updateState does.
+            // This is the last writer in a disconnect and the instance dies
+            // immediately after, so an unannounced apply() left the activity
+            // showing whatever was persisted before, and the user had to press
+            // again for a fresh instance to announce it. Anything that is
+            // connecting is by definition over.
+            stateStore.edit().putString("state", currentState).putString("message", currentMessage)
+                    .putString("endpoint", "").putString("selectedProtocol", "")
+                    .putBoolean("smartSelected", false).commit();
+            sendStatus(currentState, currentMessage);
         }
         // No instance is left to answer for the live state; the tile falls back to the persisted
         // value combined with its own ConnectivityManager cross-check.

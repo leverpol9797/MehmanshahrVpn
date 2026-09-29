@@ -608,8 +608,12 @@ public final class PsiphonChainTest {
         // Every callback that writes state has to be gated. tunnelReady and
         // readyPort are what the wait loop reads, so an ungated one resurrects a
         // chain the user already cancelled.
+        // onPsiphonConnecting was missed first time round, and it is the one that
+        // writes "connecting" — the state the button got stuck on. So the list
+        // here is every callback, not the ones that seemed worth guarding.
         for (String callback : new String[] {
-                "onPsiphonReady(int port)", "onPsiphonConnected()", "onPsiphonExiting(String reason)" }) {
+                "onPsiphonReady(int port)", "onPsiphonConnecting()",
+                "onPsiphonConnected()", "onPsiphonExiting(String reason)" }) {
             int at = chain.indexOf(callback);
             int body = chain.indexOf("{", at);
             int guard = chain.indexOf("if (stopped) return;", body);
@@ -622,6 +626,61 @@ public final class PsiphonChainTest {
         int loop = service.indexOf("siphonChain.start(entries)");
         assertTrue("the wait loop must bail when the chain was stopped",
                 service.indexOf("siphonChain.stopped()", loop) > loop);
+
+        // The service side too, because the chain's flag is only one of two ways
+        // a late callback gets in: a caller that forgets the guard entirely still
+        // reaches updateState. Each service callback writes state and has to ask.
+        int listener = service.indexOf("new SiphonChain(this, new PsiphonTunnelRunner.Listener()");
+        int end = service.indexOf("siphonChain.setCountry(", listener);
+        for (String callback : new String[] {
+                "onPsiphonReady(int port)", "onPsiphonConnecting()",
+                "onPsiphonConnected()", "onPsiphonExiting(String reason)" }) {
+            int at = service.indexOf(callback, listener);
+            int body = service.indexOf("{", at);
+            int guard = service.indexOf("if (!isCurrentSession(request, session)) return;", body);
+            assertTrue("service " + callback + " must check the session first",
+                    listener < at && at < end && guard > body);
+        }
+
+        // And updateState refuses a connecting state once the session is
+        // stopping, so a missed guard cannot reach the UI even so.
+        int update = service.indexOf("private void updateState(String state, String message)");
+        int assign = service.indexOf("currentState = state;", update);
+        assertTrue("updateState must not publish a stale connecting state",
+                service.indexOf("if (stopping &&", update) > update
+                        && service.indexOf("return;", update) < assign);
+    }
+
+    /**
+     * A disconnect has to be announced before the service dies.
+     *
+     * Disconnecting siphon needed two presses: the first tore the tunnel down,
+     * the second is what actually moved the button. The cause is here rather than
+     * in the tunnel logic — the terminal state was written with apply(), which is
+     * asynchronous, and written without a broadcast, and then stopSelf() ended the
+     * instance. So the activity kept the "connecting" it already had, and the
+     * second press started a fresh service that handled ACTION_STOP and announced
+     * the state it had been holding all along.
+     */
+    @Test public void aDisconnectIsAnnouncedBeforeTheServiceDies() throws Exception {
+        String service = read("src", "main", "java", "com", "firstham", "aethergui",
+                "AetherVpnService.java");
+
+        int update = service.indexOf("private void updateState(String state, String message)");
+        int write = service.indexOf(".putString(\"state\", currentState)", update);
+        int commit = service.indexOf(".commit();", write);
+        int send = service.indexOf("sendStatus(", commit);
+        assertTrue("the state write must be synchronous: the instance dies right after",
+                update > 0 && commit > write && commit < write + 300);
+        assertTrue("and it has to be announced", send > commit);
+
+        // onDestroy is the last writer in a disconnect, so the same applies there.
+        int destroy = service.indexOf("public void onDestroy()");
+        int tail = service.indexOf(".putString(\"state\", currentState)", destroy);
+        assertTrue("onDestroy must commit too",
+                destroy > 0 && service.indexOf(".commit();", tail) > tail);
+        assertTrue("and it must broadcast — this is the press that was needed twice",
+                service.indexOf("sendStatus(", service.indexOf(".commit();", tail)) > tail);
     }
 
     @Test public void cdnFrontingIsOptIn() {
