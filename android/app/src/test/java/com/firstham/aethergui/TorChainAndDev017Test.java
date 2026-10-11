@@ -332,18 +332,18 @@ public class TorChainAndDev017Test {
                 for (int item = 0; item < items.getLength(); item++) labels[item] = items.item(item).getTextContent();
             }
         } catch (Exception unreadable) { fail("Protocol labels unreadable: " + unreadable); }
-        assertEquals(11, labels.length);
+        // The array is indexed by the same storage index as VpnConnectionController.PROTOCOLS, so
+        // it has to hold that many entries in that order. The labels themselves are Persian,
+        // because values/ is the default locale for this product; the English wording lives in
+        // values-en and LabelArrayAlignmentTest checks the two agree.
+        assertEquals(VpnConnectionController.PROTOCOLS.length, labels.length);
         assertEquals("MASQUE", labels[0]);
         assertEquals("WireGuard", labels[1]);
         assertEquals("gool / WIW", labels[2]);
-        assertEquals("Smart Connect", labels[3]);
-        assertEquals("MIM", labels[4]);
-        assertEquals("WireGuard + Psiphon", labels[5]);
-        assertEquals("gool + Psiphon", labels[6]);
-        assertEquals("MASQUE + Psiphon", labels[7]);
-        assertEquals("WireGuard + Tor", labels[8]);
-        assertEquals("gool + Tor", labels[9]);
-        assertEquals("MASQUE + Tor", labels[10]);
+        assertTrue("psiphon is offered between gool and smart",
+                labels[3].contains("سایفون"));
+        assertTrue("smart connect follows psiphon", labels[4].contains("هوشمند"));
+        assertEquals("MIM", labels[5]);
     }
 
     @Test public void torModeDefaultIsSideForExistingUsers() {

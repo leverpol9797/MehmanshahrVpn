@@ -72,7 +72,13 @@ final class VpnConnectionController {
     static String normalizedMode(String mode) { return "manual".equals(mode) ? "manual" : "vpn"; }
 
     static int normalizedProtocolIndex(String mode, int protocolIndex) {
-        return "smart".equals(mode) ? 3 : protocolIndex;
+        // Resolved by name rather than a hardcoded slot. Index 3 was Smart Connect until
+        // psiphon moved above it, at which point this literal silently began selecting
+        // psiphon for every install still carrying the v2.1.1 mode=smart preference.
+        if ("smart".equals(mode)) {
+            for (int i = 0; i < PROTOCOLS.length; i++) if ("smart".equals(PROTOCOLS[i])) return i;
+        }
+        return protocolIndex;
     }
 
     private static String value(String[] values, int index, String fallback) {

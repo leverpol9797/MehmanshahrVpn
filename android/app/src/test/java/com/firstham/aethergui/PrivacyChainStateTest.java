@@ -226,11 +226,10 @@ public class PrivacyChainStateTest {
 
     @Test public void freshDefaultProtocolIsTheDev020ProductDecision() {
         // ConnectionDefaults.PROTOCOL_INDEX is the single source of truth for fresh install and
-        // Reset Defaults. dev.020 CHANGE 1 deliberately switches the default from the dev.019
-        // benchmark winner (MASQUE + Psiphon, index 7) to WireGuard + Psiphon (index 5) as an
-        // explicit product decision; the benchmark itself measured every candidate 5/5 connect +
-        // 5/5 traffic, so performance did not force the change and must not force it back.
-        assertEquals(5, ConnectionDefaults.PROTOCOL_INDEX);
+        // Reset Defaults. The default is plain WireGuard (index 1) as an explicit product
+        // decision, not a performance correction: the benchmark measured every candidate
+        // equally, so nothing forces a move back to a chained default.
+        assertEquals(1, ConnectionDefaults.PROTOCOL_INDEX);
         Map<String, Object> values = defaults();
         values.put("protocol", ConnectionDefaults.PROTOCOL_INDEX);
         int base = ProtocolOrder.baseIndex(ConnectionDefaults.PROTOCOL_INDEX);

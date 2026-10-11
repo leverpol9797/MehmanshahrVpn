@@ -15,13 +15,13 @@ public final class ConnectionDefaultsTest {
     }
 
     @Test public void freshInstallUsesTurboWireGuardPsiphonDefaultAutomaticMtuAndHttp2() {
-        // dev.020 CHANGE 1: the fresh/reset default protocol is WireGuard + Psiphon (storage
-        // index 5), an explicit product decision that deliberately overrides the dev.019
-        // benchmark winner (MASQUE + Psiphon) — the benchmark measured all candidates 5/5, so
-        // the switch is product intent, not a performance correction. The chain state it
-        // implies is established by PrivacyChainState on first run / reset. An existing user's
-        // saved protocol is never overwritten by an upgrade.
-        assertEquals(5, ConnectionDefaults.PROTOCOL_INDEX);
+        // The fresh/reset default protocol is plain WireGuard, storage index 1. The benchmark
+        // that once favoured a chained protocol measured every candidate equally, so the choice
+        // is product intent: gool is the Aether project's own transport, and shipping it as
+        // the default in a paid app is a front for the free one. WireGuard has no such problem.
+        // An existing user's saved protocol is never overwritten by an upgrade; see
+        // PreferenceSchemaMigration for the one-time index remap.
+        assertEquals(1, ConnectionDefaults.PROTOCOL_INDEX);
         assertEquals("wg", ConnectionDefaults.PROTOCOL);
         assertEquals(5, PsiphonChainRouting.combinedProtocolIndex(1));
         assertEquals(1, PsiphonChainRouting.combinedBaseIndex(5));
