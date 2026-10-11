@@ -35,7 +35,7 @@
     <string name="login_bot_no_app">Rubika is not installed. Copy the bot id and search for it in the app.</string>
 
     <string name="about_creator">Made by Hossein Akhlaghi</string>
-    <string name="app_version" translatable="false">v2.4.1</string>
+    <string name="app_version" translatable="false">v2.5.4</string>
     <string name="version_format" translatable="false">v%1$s</string>
     <string name="default_socks_address" translatable="false">127.0.0.1:1819</string>
     <string name="default_mtu" translatable="false">1360</string>
@@ -292,4 +292,5 @@
     <string name="service_psiphon_connected">Psiphon connected</string>
     <string name="service_psiphon_timeout">Psiphon did not come up in time</string>
     <string name="service_psiphon_no_inner_leg">No WARP leg opened on this network, and Psiphon has nothing to ride on.</string>
-  </resources>
+      <string name="update_open_downloads">The update was saved to your Downloads folder. Open it to install.</string>
+</resources>
