@@ -11,7 +11,7 @@ final class VpnConnectionController {
     // Package-private so PsiphonChainTest can assert that the UI's protocol order is the same
     // list the controller actually walks, rather than a second copy that could drift from it.
     // Still not part of the class's public surface.
-    static final String[] PROTOCOLS = {"masque", "wg", "gool", "smart", "mim"};
+    static final String[] PROTOCOLS = {"masque", "wg", "gool", "siphon", "smart", "mim"};
     private static final String[] SCANS = {"balanced", "turbo", "thorough", "verified", "ironclad"};
     private static final String[] IP_MODES = {"v4", "v6", "both"};
     private static final String[] OBFUSCATION = {"firewall", "gfw", "balanced", "aggressive", "off", "light"};

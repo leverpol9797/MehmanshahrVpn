@@ -527,14 +527,14 @@ public final class PsiphonChainTest {
      * the UI labels the wrong transports, so the order is checked in all three.
      */
     @Test public void psiphonIsOfferedAboveSmartConnect() throws Exception {
-        String expected = "{\"masque\", \"wg\", \"gool\", \"siphon\", \"smart\"}";
+        String expected = "{\"masque\", \"wg\", \"gool\", \"siphon\", \"smart\", \"mim\"}";
         String controller = read("src", "main", "java", "com", "firstham", "aethergui",
                 "VpnConnectionController.java");
         assertTrue("the controller drives the default choice", controller.contains(expected));
         for (String locale : new String[] { "values", "values-en" }) {
             String arrays = read("src", "main", "res", locale, "arrays.xml");
             assertTrue(locale + " must document the same order",
-                    arrays.contains("PROTOCOLS = { masque, wg, gool, siphon, smart }"));
+                    arrays.contains("PROTOCOLS = { masque, wg, gool, siphon, smart, mim }"));
             // The two locales name these differently, so the order is read from the
             // array items rather than matched as English text.
             int labels = arrays.indexOf("protocol_labels");
@@ -544,7 +544,7 @@ public final class PsiphonChainTest {
             java.util.regex.Matcher item = java.util.regex.Pattern
                     .compile("<item>([^<]*)</item>").matcher(items);
             while (item.find()) names.add(item.group(1));
-            assertEquals(locale + " must label every protocol", 5, names.size());
+            assertEquals(locale + " must label every protocol", 6, names.size());
             // Compared by array position, not by spelling: the two locales
             // name these differently, and a test that hardcodes either string
             // only tests the string.
