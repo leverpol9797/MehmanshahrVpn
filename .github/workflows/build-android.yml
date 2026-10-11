@@ -21,33 +21,50 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Fetch native VPN core assets
+      - name: Fetch and stage verified native inputs
+        # Two distinct sources, because the manifest describes two distinct provenances:
+        #   - the Aether payloads (libaether.so + the pt/ helpers) come unmodified out of the
+        #     official v2.3.0 release archives and are checked against scripts/aether-pins.json
+        #     and the helper manifest;
+        #   - libhev-socks5-tunnel.so is BUILT here from the pinned source commit, then checked
+        #     against native-inputs/android/verified-native-inputs.json.
+        # Everything lands in native-inputs/android/verified-jni and verified-helpers, which is
+        # where android/verified-native.gradle looks and what .gitignore keeps out of the repo.
         run: |
-          mkdir -p android/app/src/main/jniLibs
-          base='https://github.com/CluvexStudio/Aether/releases/download/v1.9.0'
-          for spec in 'armeabi-v7a aether-android-armv7.tar.gz d49ee19423a33d905fb4fef3f163d2e3c88e5223940e0f03dbe6324bb2c7dcdb e93d13c270f6636195a6262ec642235d75b2e6a15fe9e5640978b5483407da6a' 'arm64-v8a aether-android-arm64.tar.gz a5a488b8cf05b3e83c28ca35cef78334130411c8df5314850e816b900e9d6cb9 892d4fa467b32dd447791e08f518238ceeb0ab16c702d302077851565d0b8829' 'x86_64 aether-android-x86_64.tar.gz 0c4dfcea54b5a39c0a3a52473d1fb9c2ff5c4ed92de5d240f84f18f54425f961 eb2bf174dbea1095a890f9e1f358dbcb5aa62fc00c039e8becc89f0f212e7327'; do
-            set -- $spec; abi=$1; archive=$2; expected=$3; binary=$4
-            tmp=$(mktemp -d); curl -L --fail "$base/$archive" -o "$tmp/$archive"
-            echo "$expected  $tmp/$archive" | sha256sum -c -
-            tar -xzf "$tmp/$archive" -C "$tmp"
-            core=$(find "$tmp" -type f -name aether | head -1)
-            test "$(sha256sum "$core" | cut -d' ' -f1)" = "$binary"
-            mkdir -p "android/app/src/main/jniLibs/$abi"
-            cp "$core" "android/app/src/main/jniLibs/$abi/libaether.so"
-            rm -rf "$tmp"
-          done
-          
+          set -euo pipefail
+          ./scripts/stage-verified-native-inputs.sh
+
           NDK_BUILD=$(find $ANDROID_SDK_ROOT/ndk -name ndk-build | sort -V | tail -1)
           if [ -z "$NDK_BUILD" ]; then
             NDK_BUILD=$(find $ANDROID_HOME/ndk -name ndk-build | sort -V | tail -1)
           fi
           echo "Using ndk-build: $NDK_BUILD"
 
+          HEV_COMMIT=$(node -e "process.stdout.write(require('./native-inputs/android/NATIVE_INPUTS.json').hevSourceCommit)")
+          echo "hev source commit: $HEV_COMMIT"
           work=$(mktemp -d)
-          git clone --quiet --branch 2.16.0 --depth 1 --recurse-submodules https://github.com/heiher/hev-socks5-tunnel.git "$work/hev"
-          "$NDK_BUILD" NDK_PROJECT_PATH="$work/hev" APP_BUILD_SCRIPT="$work/hev/Android.mk" NDK_APPLICATION_MK="$work/hev/Application.mk" 'APP_ABI=armeabi-v7a arm64-v8a x86_64' 'APP_CFLAGS=-O3 -DPKGNAME=hev/htproxy' NDK_LIBS_OUT="$work/libs" NDK_OUT="$work/obj" -j4
-          for abi in armeabi-v7a arm64-v8a x86_64; do cp "$work/libs/$abi/libhev-socks5-tunnel.so" "android/app/src/main/jniLibs/$abi/"; done
+          git clone --quiet https://github.com/heiher/hev-socks5-tunnel.git "$work/hev"
+          git -C "$work/hev" checkout --quiet "$HEV_COMMIT"
+          git -C "$work/hev" submodule update --quiet --init --recursive
+
+          "$NDK_BUILD" NDK_PROJECT_PATH="$work/hev" APP_BUILD_SCRIPT="$work/hev/Android.mk" \
+            NDK_APPLICATION_MK="$work/hev/Application.mk" 'APP_ABI=armeabi-v7a arm64-v8a x86_64' \
+            'APP_CFLAGS=-O3 -DPKGNAME=hev/htproxy' NDK_LIBS_OUT="$work/libs" NDK_OUT="$work/obj" -j4
+
+          # A local build that differs by one byte from the approved payload is a build failure,
+          # not a warning: the whole point of the pinned manifest is that these bytes are the
+          # ones already vetted. Let prepareVerifiedNativeInputs be the one that decides.
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            cp "$work/libs/$abi/libhev-socks5-tunnel.so" "native-inputs/android/verified-jni/$abi/"
+          done
           rm -rf "$work"
+
+      - name: Mirror staged natives into the app's jniLibs
+        run: |
+          set -euo pipefail
+          mkdir -p android/app/src/main/jniLibs
+          cp -r native-inputs/android/verified-jni/. android/app/src/main/jniLibs/
+          ls -la android/app/src/main/jniLibs/*/
 
       - name: Run unit tests
         run: |
