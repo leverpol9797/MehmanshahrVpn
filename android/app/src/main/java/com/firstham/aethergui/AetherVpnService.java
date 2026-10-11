@@ -3102,7 +3102,10 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
-    private void sendLog(String line) {
+    // Package-private, not private: SiphonChain drives the Psiphon leg of the chain and reports
+    // its progress through this same log, so it has to reach the output the service writes.
+    // Still invisible outside the package, and the redaction of line 3107 still applies.
+    void sendLog(String line) {
         if (line == null || line.trim().isEmpty()) return;
         if (activeRequest != null) line = CoreSettings.redact(line, AndroidCoreSettings.fromIntent(activeRequest));
         Log.i(TAG, line);
