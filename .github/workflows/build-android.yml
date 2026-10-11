@@ -87,6 +87,14 @@ jobs:
       - name: Show staged native payloads
         run: ls -la android/app/src/main/jniLibs/*/
 
+      # The version is declared in five places and each was bumped by hand at least once,
+      # which is how package.json stayed on 2.5.4 while the APK shipped 2.5.5 and the About
+      # page showed neither. These never ran here before, so nothing caught it.
+      - name: Check the declared versions agree
+        run: |
+          CHECK_ONLY=1 bash scripts/sync-version.sh
+          node tests/frontend.test.mjs
+
       - name: Run unit tests
         run: |
           cd android

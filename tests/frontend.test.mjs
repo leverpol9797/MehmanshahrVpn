@@ -520,7 +520,13 @@ test('About: version, core version, links, Telegram; no development diagnostics'
   const about = html.slice(aboutStart, aboutEnd);
   assert.ok(!about.includes('id="diag'));
   // No duplicate version labels.
-  assert.equal((about.match(/v2\.5\.4/g) || []).length, 1);
+  // Exactly one version label in the About view. The value is read from build.gradle rather
+  // than written out here, because a copy of the number in the test is a copy that goes stale
+  // on the next release and fails for a reason unrelated to what it is checking.
+  const gradle = await read('../android/app/build.gradle');
+  const version = /versionName '([^']+)'/.exec(gradle)[1];
+  assert.ok(html.includes(`v${version}`), `index.html must show v${version}`);
+  assert.equal((about.match(new RegExp(`v${version.replace(/\./g, '\\.')}`, 'g')) || []).length, 1);
 });
 
 test('Windows VPN lifecycle retains elevation, recovery, TUN readiness, and clean shutdown', async () => {
