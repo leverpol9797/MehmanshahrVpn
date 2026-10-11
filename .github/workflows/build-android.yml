@@ -49,11 +49,14 @@ jobs:
             'APP_CFLAGS=-O3 -DPKGNAME=hev/htproxy' NDK_LIBS_OUT="$work/libs" NDK_OUT="$work/obj" -j4
 
           for abi in armeabi-v7a arm64-v8a x86_64; do
+            mkdir -p "android/app/src/main/jniLibs/$abi"
             cp "$work/libs/$abi/libhev-socks5-tunnel.so" "android/app/src/main/jniLibs/$abi/"
           done
 
           # libaether.so is the one the app ships and verifyAetherPayloads checks; the pt/ helpers
           # are present for the Psiphon chain, which README documents as suspended.
+          mkdir -p android/app/src/main/jniLibs
+          for abi in armeabi-v7a arm64-v8a x86_64; do mkdir -p "android/app/src/main/jniLibs/$abi"; done
           cp -r native-inputs/android/verified-jni/. android/app/src/main/jniLibs/
           rm -rf "$work"
 
