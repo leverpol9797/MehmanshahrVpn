@@ -105,10 +105,10 @@ public final class V230UiResourcesTest {
             }
             for (String name : sizes.keySet()) assertTrue(locale + " missing " + name, names.contains(name));
         }
-        // The storage contract: Gool Mode index 0 = Gool over MASQUE, 1 = Classic Gool.
-        Element english = array("values/arrays.xml", "gool_mode_labels");
-        assertEquals("Gool over MASQUE", english.getElementsByTagName("item").item(0).getTextContent());
-        assertEquals("Classic Gool", english.getElementsByTagName("item").item(1).getTextContent());
+        // The storage contract: Gool Mode index 0 = Gool over MASQUE, 1 = Classic Gool, stated
+        // by position. values/ is the default locale and this product defaults to Persian, so
+        // the English wording is not what ships there; LabelArrayAlignmentTest is the test that
+        // locks that decision in, and values-fa carries the translation.
         Element persian = array("values-fa/arrays.xml", "gool_mode_labels");
         for (int i = 0; i < 2; i++)
             assertTrue("the Persian Gool Mode labels must be translated",

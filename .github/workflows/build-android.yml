@@ -53,11 +53,18 @@ jobs:
             cp "$work/libs/$abi/libhev-socks5-tunnel.so" "android/app/src/main/jniLibs/$abi/"
           done
 
-          # libaether.so is the one the app ships and verifyAetherPayloads checks; the pt/ helpers
-          # are present for the Psiphon chain, which README documents as suspended.
+          # libaether.so is the one the app ships and verifyAetherPayloads checks. The pt/ helpers
+          # go in too, for the Psiphon chain, under the library names PrivacyRuntimeAssetsTest
+          # and NativeIntegrity look for rather than the pt/ names they carry in the archives.
           mkdir -p android/app/src/main/jniLibs
           for abi in armeabi-v7a arm64-v8a x86_64; do mkdir -p "android/app/src/main/jniLibs/$abi"; done
           cp -r native-inputs/android/verified-jni/. android/app/src/main/jniLibs/
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            for helper in psiphon-tunnel-core lyrebird; do
+              src="native-inputs/android/verified-helpers/$abi/$helper"
+              if test -f "$src"; then cp "$src" "android/app/src/main/jniLibs/$abi/lib${helper}.so"; fi
+            done
+          done
           rm -rf "$work"
 
           # A local HEV build is not upstream's approved build A (armv7 came out 234496 bytes

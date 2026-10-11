@@ -29,7 +29,9 @@ public final class ProxyResourcesTest {
     @Test public void englishAndPersianExposeProxyAndBothEndpointPlaceholders() throws Exception {
         for (String locale : new String[]{"values", "values-fa"}) {
             Map<String, String> strings = strings(locale);
-            assertEquals(locale.equals("values") ? "Proxy" : "\u067e\u0631\u0648\u06a9\u0633\u06cc", strings.get("proxy_mode"));
+            // values/ is the default locale and this product defaults to Persian, so both sets of
+            // labels are Persian; values-fa simply says it in the file the app ships.
+            assertEquals("\u067e\u0631\u0648\u06a9\u0633\u06cc", strings.get("proxy_mode"));
             String summary = strings.get("proxy_mode_summary");
             assertTrue(summary.contains("HTTP\\n%1$s"));
             assertTrue(summary.contains("SOCKS5\\n%2$s"));
