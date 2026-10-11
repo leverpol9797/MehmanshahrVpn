@@ -1,5 +1,5 @@
 <resources>
-    <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WIW</item><item>سایفون روی WARP</item><item>اتصال هوشمند</item><item>MIM</item></string-array>
+    <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WIW</item><item>اتصال هوشمند</item><item>MIM</item><item>WireGuard + سایفون</item><item>gool + سایفون</item><item>MASQUE + سایفون</item><item>WireGuard + تور</item><item>gool + تور</item><item>MASQUE + تور</item></string-array>
     <string-array name="scan_labels"><item>متعادل</item><item>توربو</item><item>کامل</item><item>تأییدشده</item><item>اعتبارسنجی سخت‌گیرانه</item></string-array>
     <string-array name="transport_labels"><item>HTTP/3 (QUIC)</item><item>HTTP/2 (TCP)</item></string-array>
     <string-array name="ip_labels"><item>IPv4 (پیشنهادی)</item><item>IPv6</item><item>IPv4 + IPv6</item></string-array>

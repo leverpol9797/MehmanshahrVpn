@@ -329,18 +329,22 @@ public class TorChainAndDev017Test {
                 for (int item = 0; item < items.getLength(); item++) labels[item] = items.item(item).getTextContent();
             }
         } catch (Exception unreadable) { fail("Protocol labels unreadable: " + unreadable); }
-        // The array is indexed by the same storage index as VpnConnectionController.PROTOCOLS, so
-        // it has to hold that many entries in that order. The labels themselves are Persian,
-        // because values/ is the default locale for this product; the English wording lives in
-        // values-en and LabelArrayAlignmentTest checks the two agree.
+        // The array is indexed by the same storage index as VpnConnectionController.PROTOCOLS,
+        // so it holds that many entries in that order. values/ is the default locale and this
+        // product defaults to Persian, so the wording checked here is the Persian one; the
+        // English wording lives in values-en.
         assertEquals(VpnConnectionController.PROTOCOLS.length, labels.length);
+        assertEquals(11, labels.length);
         assertEquals("MASQUE", labels[0]);
         assertEquals("WireGuard", labels[1]);
         assertEquals("gool / WIW", labels[2]);
-        assertTrue("psiphon is offered between gool and smart",
-                labels[3].contains("سایفون"));
-        assertTrue("smart connect follows psiphon", labels[4].contains("هوشمند"));
-        assertEquals("MIM", labels[5]);
+        assertTrue("Smart Connect sits at index 3", labels[3].contains("هوشمند"));
+        assertEquals("MIM", labels[4]);
+        assertTrue("index 5 is the first combined entry", labels[5].contains("سایفون"));
+        assertTrue("index 8 is the first Tor entry", labels[8].contains("تور"));
+        assertTrue("index 10 is the last entry", labels[10].contains("تور"));
+        for (int index = 0; index < labels.length; index++)
+            assertFalse("label " + index + " must not be empty", labels[index].trim().isEmpty());
     }
 
     @Test public void torModeDefaultIsSideForExistingUsers() {

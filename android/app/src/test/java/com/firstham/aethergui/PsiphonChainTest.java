@@ -527,45 +527,41 @@ public final class PsiphonChainTest {
      * that reaches where the single leg does not. Three files have to agree or
      * the UI labels the wrong transports, so the order is checked in all three.
      */
-    @Ignore("No longer describes the code: 32e8c5c removed the symbols this asserted on") @Test public void psiphonIsOfferedAboveSmartConnect() throws Exception {
-        String expected = "{\"masque\", \"wg\", \"gool\", \"siphon\", \"smart\", \"mim\"}";
-        String controller = read("src", "main", "java", "com", "firstham", "aethergui",
-                "VpnConnectionController.java");
-        assertTrue("the controller drives the default choice", controller.contains(expected));
-        for (String locale : new String[] { "values", "values-en" }) {
+    @Test public void everyProtocolHasALabelAtItsStorageIndexInEveryLocale() throws Exception {
+        // ProtocolOrder documents this array as the storage contract: the persisted protocol
+        // preference IS an index into it, and MainActivity reads it at the indices
+        // displayIndices() emits. Dropping an entry here does not hide a row, it crashes the
+        // dropdown.
+        String[] order = VpnConnectionController.PROTOCOLS;
+        assertEquals("the controller list is the eleven-entry contract", 11, order.length);
+        assertEquals("masque", order[ProtocolOrder.MASQUE]);
+        assertEquals("wg", order[ProtocolOrder.WIREGUARD]);
+        assertEquals("gool", order[ProtocolOrder.GOOL]);
+        assertEquals("smart", order[ProtocolOrder.SMART]);
+        assertEquals("mim", order[ProtocolOrder.MIM]);
+        for (int index = 5; index <= 10; index++)
+            assertTrue("entry " + index + " must be a combined protocol", order[index].contains("+"));
+        for (String locale : new String[] { "values", "values-en", "values-fa" }) {
             String arrays = read("src", "main", "res", locale, "arrays.xml");
-            assertTrue(locale + " must document the same order",
-                    arrays.contains("PROTOCOLS = { masque, wg, gool, siphon, smart, mim }"));
-            // The two locales name these differently, so the order is read from the
-            // array items rather than matched as English text.
             int labels = arrays.indexOf("protocol_labels");
-            int end = arrays.indexOf("</string-array>", labels);
-            String items = arrays.substring(labels, end);
+            int endOfArray = arrays.indexOf("</string-array>", labels);
+            assertTrue(locale + " must define protocol_labels", labels >= 0 && endOfArray > labels);
+            String items = arrays.substring(labels, endOfArray);
             java.util.List<String> names = new java.util.ArrayList<>();
             java.util.regex.Matcher item = java.util.regex.Pattern
                     .compile("<item>([^<]*)</item>").matcher(items);
             while (item.find()) names.add(item.group(1));
-            assertEquals(locale + " must label every protocol", 6, names.size());
-            // Compared by array position, not by spelling: the two locales
-            // name these differently, and a test that hardcodes either string
-            // only tests the string.
-            int psiphon = -1;
-            int smart = -1;
-            String[] order = VpnConnectionController.PROTOCOLS;
-            for (int i = 0; i < order.length; i++) {
-                if ("siphon".equals(order[i])) psiphon = i;
-                if ("smart".equals(order[i])) smart = i;
-            }
-            assertTrue(locale + " must label every protocol", names.size() == order.length);
-            assertTrue(locale + " lists psiphon above smart connect", psiphon < smart);
-            assertTrue(locale + " must name the psiphon entry", !names.get(psiphon).isEmpty());
-            assertTrue(locale + " must name the smart entry", !names.get(smart).isEmpty());
-            assertFalse(locale + " must not repeat a label",
-                    names.get(psiphon).equals(names.get(smart)));
-            assertEquals("and they must line up with the controller's order",
-                    VpnConnectionController.PROTOCOLS[psiphon], "siphon");
-            assertEquals(VpnConnectionController.PROTOCOLS[smart], "smart");
+            assertEquals(locale + " must label every protocol", order.length, names.size());
+            for (int index = 0; index < names.size(); index++)
+                assertFalse(locale + " has an empty label at " + index, names.get(index).trim().isEmpty());
         }
+        // displayIndices() may emit any index in the list, so every one of them has to be
+        // inside the array. This is the check that would have caught the six-entry trim.
+        for (boolean proxyMode : new boolean[] { false, true })
+            for (boolean tor : new boolean[] { false, true })
+                for (int index : ProtocolOrder.displayIndices(proxyMode, tor))
+                    assertTrue("display index " + index + " is outside the array",
+                            index >= 0 && index < order.length);
     }
 
     /**

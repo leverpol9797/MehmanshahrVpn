@@ -5,7 +5,7 @@
          0=MASQUE 1=WireGuard 2=gool 3=Psiphon 4=Smart 5=MIM.
          Smart Connect is shown first through the dropdown adapter's display order, not by
          reordering storage. -->
-    <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WIW</item><item>سایفون روی WARP</item><item>اتصال هوشمند</item><item>MIM</item></string-array>
+    <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WIW</item><item>اتصال هوشمند</item><item>MIM</item><item>WireGuard + سایفون</item><item>gool + سایفون</item><item>MASQUE + سایفون</item><item>WireGuard + تور</item><item>gool + تور</item><item>MASQUE + تور</item></string-array>
     <!-- dev.017 CHANGE 6: no "(recommended)" suffix on Turbo; Turbo stays the fresh/reset default
          (ConnectionDefaults.SCAN_INDEX = 1) without changing stored indices. -->
     <string-array name="scan_labels"><item>متعادل</item><item>توربو</item><item>کامل</item><item>تأییدشده</item><item>اعتبارسنجی سخت‌گیرانه</item></string-array>

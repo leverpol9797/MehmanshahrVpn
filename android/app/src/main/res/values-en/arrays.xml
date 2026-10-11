@@ -1,6 +1,6 @@
 <resources>
     <!-- PROTOCOLS = { masque, wg, gool, siphon, smart, mim } -->
-  <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WARP-in-WARP</item><item>Psiphon over WARP</item><item>Smart Connect</item><item>MIM</item></string-array>
+  <string-array name="protocol_labels"><item>MASQUE</item><item>WireGuard</item><item>gool / WARP-in-WARP</item><item>Smart Connect</item><item>MIM</item><item>WireGuard + Psiphon</item><item>gool + Psiphon</item><item>MASQUE + Psiphon</item><item>WireGuard + Tor</item><item>gool + Tor</item><item>MASQUE + Tor</item></string-array>
     <string-array name="scan_labels"><item>Balanced</item><item>Turbo</item><item>Thorough</item><item>Stealth</item><item>Ironclad verification</item></string-array>
     <string-array name="transport_labels"><item>HTTP/3 (QUIC)</item><item>HTTP/2 (TCP, recommended)</item></string-array>
     <string-array name="ip_labels"><item>IPv4 (recommended)</item><item>IPv6</item><item>IPv4 + IPv6</item></string-array>
