@@ -93,6 +93,7 @@ jobs:
       - name: Check the declared versions agree
         run: |
           CHECK_ONLY=1 bash scripts/sync-version.sh
+          node scripts/check-resources.mjs
           node tests/frontend.test.mjs
 
       - name: Run unit tests

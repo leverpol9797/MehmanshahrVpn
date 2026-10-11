@@ -8,7 +8,7 @@
         the cards their edge without a shadow on API levels that make shadows expensive.
     -->
     <color name="app_background">#0B1020</color>
-    <color name="surface">#141A2E</color>
+    <color name="app_surface">#141A2E</color>
     <color name="surface_raised">#1C2340</color>
     <color name="surface_sunken">#0A0E1B</color>
     <color name="app_border">#2A3355</color>

@@ -14,7 +14,7 @@
         <item name="colorOnPrimary">@color/app_text</item>
         <item name="colorPrimaryContainer">@color/app_accent_soft</item>
         <item name="colorOnPrimaryContainer">@color/app_text</item>
-        <item name="colorSurface">@color/surface</item>
+        <item name="colorSurface">@color/app_surface</item>
         <item name="colorSurfaceVariant">@color/surface_raised</item>
         <item name="colorOutline">@color/app_border</item>
         <item name="colorOnSurface">@color/app_text</item>
