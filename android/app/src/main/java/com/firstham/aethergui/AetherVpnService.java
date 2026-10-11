@@ -2712,7 +2712,7 @@ public final class AetherVpnService extends VpnService {
             long now = System.currentTimeMillis();
             if (previousWidgetPing != lastPing || now - lastWidgetUpdateAt >= 6_000L) {
                 lastWidgetUpdateAt = now;
-                AethonWidgetProvider.update(this);
+                MehmanshahrWidgetProvider.update(this);
             }
         }
         maybeCheckTunnelHealth();
@@ -3047,8 +3047,8 @@ public final class AetherVpnService extends VpnService {
                 .putString("connectionMode", activeRequest == null ? "" : value(activeRequest, "connectionMode", "vpn"))
                 .putString("selectedProtocol", selectedProtocol).putBoolean("smartSelected", smartSelected).apply();
         sendStatus(currentState, currentMessage);
-        AethonTileService.requestUpdate(this);
-        AethonWidgetProvider.update(this);
+        MehmanshahrTileService.requestUpdate(this);
+        MehmanshahrWidgetProvider.update(this);
     }
 
     private void sendStatus(String state, String message) {
@@ -3238,7 +3238,7 @@ public final class AetherVpnService extends VpnService {
         // No instance is left to answer for the live state; the tile falls back to the persisted
         // value combined with its own ConnectivityManager cross-check.
         LIVE_STATE.set(null);
-        AethonTileService.requestUpdate(this);
+        MehmanshahrTileService.requestUpdate(this);
         telemetry.shutdownNow();
         lifecycle.shutdownNow();
         worker.shutdownNow();

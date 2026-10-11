@@ -221,9 +221,9 @@ public final class MainActivity extends AppCompatActivity {
         renderUpdateState();
         renderState(initialState(), getString(R.string.status_ready_message));
         autoConnectPending = savedInstanceState == null && preferences.getBoolean("autoConnectAtStart", false);
-        if (getIntent().getBooleanExtra(AethonTileService.EXTRA_CONNECT_FROM_TILE, false)) {
+        if (getIntent().getBooleanExtra(MehmanshahrTileService.EXTRA_CONNECT_FROM_TILE, false)) {
             autoConnectPending = false;
-            getIntent().removeExtra(AethonTileService.EXTRA_CONNECT_FROM_TILE);
+            getIntent().removeExtra(MehmanshahrTileService.EXTRA_CONNECT_FROM_TILE);
             binding.root.post(this::connect);
         }
     }
@@ -1180,7 +1180,7 @@ public final class MainActivity extends AppCompatActivity {
     private void requestQuickSettingsTile() {
         if (Build.VERSION.SDK_INT >= 33) {
             StatusBarManager manager = getSystemService(StatusBarManager.class);
-            manager.requestAddTileService(new ComponentName(this, AethonTileService.class), getString(R.string.tile_name), Icon.createWithResource(this, R.drawable.ic_aethon_mono), getMainExecutor(), result -> Toast.makeText(this, R.string.tile_add_requested, Toast.LENGTH_SHORT).show());
+            manager.requestAddTileService(new ComponentName(this, MehmanshahrTileService.class), getString(R.string.tile_name), Icon.createWithResource(this, R.drawable.ic_aethon_mono), getMainExecutor(), result -> Toast.makeText(this, R.string.tile_add_requested, Toast.LENGTH_SHORT).show());
             return;
         }
         try { startActivity(new Intent("android.settings.QUICK_SETTINGS_SETTINGS")); }
