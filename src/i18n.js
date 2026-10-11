@@ -145,8 +145,8 @@ const en = {
   // About
   'about.title': 'About', 'about.original': 'Original Project: Aether',
   'about.originalCredit': 'Based on the original Aether project by CluvexStudio.',
-  'about.application': 'Application: Aethon VPN',
-  'about.applicationCredit': 'Android/Windows application and interface developed for Aether.',
+  'about.application': 'Application: MehmanshahrVpn',
+  'about.applicationCredit': 'Android/Windows application and interface by MehmanshahrVpn, based on the Aethon GUI.',
   'about.version': 'Version', 'about.coreVersion': 'Aether Core',
   'about.telegram': 'Telegram community',
 
@@ -298,8 +298,8 @@ const fa = {
   // درباره
   'about.title': 'درباره', 'about.original': 'پروژه اصلی: Aether',
   'about.originalCredit': 'بر پایه پروژه اصلی Aether از CluvexStudio.',
-  'about.application': 'برنامه: Aethon VPN',
-  'about.applicationCredit': 'برنامه و رابط Android/Windows توسعه‌یافته برای Aether.',
+  'about.application': 'برنامه: MehmanshahrVpn',
+  'about.applicationCredit': 'برنامه و رابط Android/Windows متعلق به MehmanshahrVpn، بر پایه‌ی رابط گرافیکی Aethon.',
   'about.version': 'نسخه', 'about.coreVersion': 'هسته Aether',
   'about.telegram': 'جامعه تلگرام',
 
@@ -310,7 +310,7 @@ const fa = {
 };
 
 export const translations = { en, fa };
-let language = 'en';
+let language = 'fa'; // PRODUCT POLICY (MehmanshahrVpn): Persian is the default; English stays selectable in Settings.
 export function t(key){const selected=translations[language];if(Object.hasOwn(selected,key))return selected[key];if(Object.hasOwn(translations.en,key))return translations.en[key];return key}
 export function setLanguage(next){language=next==='fa'?'fa':'en';document.documentElement.lang=language;document.documentElement.dir=language==='fa'?'rtl':'ltr';document.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=t(node.dataset.i18n));document.querySelectorAll('[data-i18n-placeholder]').forEach(node=>node.placeholder=t(node.dataset.i18nPlaceholder))}
 export function applyTranslations(){setLanguage(language)}

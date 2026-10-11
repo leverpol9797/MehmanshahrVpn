@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Aethon VPN</string>
+    <string name="app_name">MehmanshahrVpn</string>
     <string name="nav_connect">اتصال</string><string name="nav_configurations">پیکربندی‌ها</string><string name="nav_settings">تنظیمات</string><string name="open_navigation">باز کردن منو</string><string name="close_navigation">بستن منو</string>
     <string name="configurations_title">پیکربندی‌ها</string><string name="settings_title">تنظیمات</string><string name="settings_summary">برنامه Aethon چگونه رفتار و نمایش داده شود؟</string>
     <string name="connect">اتصال</string><string name="disconnect">قطع اتصال</string><string name="connecting">در حال اتصال…</string><string name="disconnecting">در حال قطع…</string>
@@ -32,9 +32,9 @@
     <string name="aether_credit">بر پایه پروژه اصلی Aether توسط CluvexStudio.</string>
     <string name="aether_core_version">Aether Core v2.3.0</string>
     <string name="aether_repository" translatable="false">https://github.com/CluvexStudio/Aether</string>
-    <string name="application_project">برنامه: Aethon VPN</string>
-    <string name="aethon_credit">برنامه و رابط اندروید توسعه‌یافته برای Aether.</string>
-    <string name="aethon_repository" translatable="false">https://github.com/hamvex/AetherGUI</string>
+    <string name="application_project">برنامه: MehmanshahrVpn</string>
+    <string name="aethon_credit">برنامه و رابط اندروید MehmanshahrVpn، بر پایه‌ی رابط گرافیکی Aethon.</string>
+    <string name="aethon_repository" translatable="false">https://github.com/leverpol9797/MehmanshahrVpn</string>
     <string name="widget_active">Aethon فعال</string><string name="widget_disconnected">قطع</string><string name="backup_restore">پشتیبان‌گیری و بازیابی</string><string name="backup_settings">خروجی تنظیمات</string><string name="restore_settings">ورود تنظیمات</string><string name="backup_exported">پشتیبان تنظیمات ایجاد شد.</string><string name="backup_restored">تنظیمات بازیابی شد.</string><string name="backup_failed">پردازش پشتیبان ناموفق بود.</string><string name="restore_confirmation">ورود پشتیبان تنظیمات سازگار را جایگزین می‌کند. ادامه می‌دهید؟</string><string name="connection_from_lan">اشتراک در شبکهٔ محلی</string><string name="connection_from_lan_summary">اجازه استفاده دستگاه‌های محلی از تونل فعال Aethon.</string><string name="lan_enabled">فعال</string><string name="lan_disabled">غیرفعال</string><string name="lan_address">نشانی محلی: %1$s:%2$d</string><string name="lan_protocol">پروتکل: SOCKS5</string><string name="lan_credentials">پروتکل: SOCKS5 • کاربر %1$s • گذرواژه %2$s</string><string name="copy_address">کپی نشانی</string><string name="copy_port">کپی پورت</string>
     <string name="status_connected">Aethon فعال</string>
     <string name="status_connected_via_smart">Aethon فعال • %1$s</string>

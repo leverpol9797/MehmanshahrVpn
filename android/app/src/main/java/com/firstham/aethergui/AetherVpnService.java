@@ -33,8 +33,6 @@ import java.io.OutputStream;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import javax.net.ssl.SNIHostName;
@@ -56,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -71,121 +70,27 @@ public final class AetherVpnService extends VpnService {
     public static final String ACTION_STATS = "com.firstham.aethergui.STATS";
     public static final String ACTION_CLEAR_LOGS = "com.firstham.aethergui.CLEAR_LOGS";
     public static final String ACTION_SET_LAN = "com.firstham.aethergui.SET_LAN";
-    public static final String INTERNAL_PERMISSION = "com.mehmanshahr.vpn.permission.INTERNAL";
+    public static final String INTERNAL_PERMISSION = "io.github.hamvex.aethergui.permission.INTERNAL";
     private static final String CHANNEL_ID = "aether_vpn";
     private static final String ALERT_CHANNEL_ID = "aether_vpn_alerts";
     private static final int NOTIFICATION_ID = 1819;
     private static final int ALERT_NOTIFICATION_ID = 1820;
     private static final int SOCKS_TIMEOUT_MS = 60_000;
-    /**
-     * Set on the start request when this session is a chain, so the core
-     * publishes on the chain's port even though the protocol it is handed is an
-     * inner WARP leg rather than "siphon".
-     */
-    static final String EXTRA_CHAIN_LEG = "chainLeg";
-
-    /**
-     * HEV's own mapped DNS address, used as the TUN resolver on a chain.
-     *
-     * It has to match the mapdns.address in the bridge config, or the two disagree
-     * and resolution fails in a way that looks like a dead tunnel.
-     */
-    /**
-     * The TUN address plan, and the prefix is load-bearing.
-     *
-     * This was the bug behind "connected, but nothing works". The interface was
-     * 198.18.0.1/30, so the subnet was 198.18.0.0/30 and lwIP's own address fell
-     * outside it — and the failure mode is silence, exactly as MSN-GUARD's
-     * Tun2SocksManager warns in the class doc:
-     *
-     *   "Passing the interface address to runTun2Socks() instead of the router
-     *    address makes lwIP silently drop every packet."
-     *
-     * A /30 admits four addresses and cannot hold both ends of a point-to-point
-     * link plus the resolver. /8 over 10.0.0.0 holds all three with room to spare,
-     * which is why their PrivateAddress is ("10.0.0.1", "10.0.0.0", 8, "10.0.0.2").
-     *
-     * The session published connected, with a real German exit, because the
-     * traffic gate probes the SOCKS listener directly from this app and this app
-     * is excluded from the TUN. Nothing in that path touches the bridge, so a
-     * bridge that drops every packet looks identical to a healthy one.
-     */
-    private static final String HEV_TUN_ADDRESS = "10.0.0.1";
-    private static final int HEV_TUN_PREFIX = 8;
-    private static final String HEV_TUN_SUBNET = "10.0.0.0";
-    /** What lwIP answers on, and what the TUN names as its resolver. */
-    private static final String HEV_ROUTER_DNS = "10.0.0.2";
-    private static final String HEV_MAPDNS_NETWORK = "100.64.0.0";
-    private static final int HEV_MAPDNS_PREFIX = 10;
-    private static final String HEV_TUN_ADDRESS_V6 = "fc00::1";
-    private static final int HEV_TUN_PREFIX_V6 = 126;
-
-    /**
-     * The SOCKS address this request's core is publishing on.
-     *
-     * One place, because the address is chosen in two different ways and reading
-     * it from the wrong one is silent. A caller may name a port in the "socks"
-     * extra, and a chained session overrides it to 1820 regardless — 1819 belongs
-     * to Psiphon's own listener, which is about to bind there. Everything that
-     * waits for, probes, publishes or releases a port has to agree, or the chain
-     * waits its whole timeout on a port the core never opened while the port it
-     * did open goes unreferenced.
-     */
-    /**
-     * How the bridge should carry UDP to this session's SOCKS server.
-     *
-     * HEV's socks5.udp is "udp" or "tcp", and it is the client's choice, not the
-     * server's: "udp" makes HEV open a SOCKS5 UDP ASSOCIATE, which is command
-     * 0x03. The Aether core grants that. Psiphon does not — its SOCKS listener
-     * answers CONNECT only, and the field log filled with "socks5ReadCommand:
-     * SOCKS message field command was 0x03, not 0x01", hundreds of times, with
-     * name resolution as the traffic behind it.
-     *
-     * So a chain tunnels UDP over TCP. That is slower per byte and costs nothing
-     * in practice, because a SOCKS5 upstream cannot carry a UDP associate anyway
-     * — which is also why Psiphon stops offering QUIC-OSSH on this leg.
-     */
-    /**
-     * The SOCKS address the device's traffic actually arrives at.
-     *
-     * One place, for the same reason coreSocksAddress is one place. On a chain
-     * these are two different ports serving two different questions: the core's
-     * answers "is the WARP leg up", this one answers "does a request from the
-     * device reach the internet". The traffic gate, the location lookup and LAN
-     * sharing all ask the second question and so must dial this; the ladder, the
-     * port release and AETHER_SOCKS ask the first.
-     */
-    private static String deviceSocksAddress(Intent request) {
-        if (request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
-            return SiphonChain.deviceSocksAddress();
-        }
-        return coreSocksAddress(request);
-    }
-
-    private static String socksUdpMode(Intent request) {
-        return request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false) ? "tcp" : "udp";
-    }
-
-    private static String coreSocksAddress(Intent request) {
-        if (request != null && request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
-            return SiphonChain.chainSocksAddress();
-        }
-        return request == null ? "127.0.0.1:1819"
-                : value(request, "socks", "127.0.0.1:1819");
-    }
-    /**
-     * How long the whole chain gets to come up.
-     *
-     * Longer than SOCKS_TIMEOUT_MS on purpose: that budget is for the core
-     * alone, and Psiphon then has to scan servers and negotiate a session
-     * through it. Measured against a one-leg connect, the chain is roughly
-     * double the work before anything is listening.
-     */
-    private static final long PSIPHON_TIMEOUT_MS = 120_000L;
     private static final int SMART_PROTOCOL_TIMEOUT_MS = 18_000;
     private static final double SMART_EARLY_ACCEPT_SCORE = 96.0;
     private static final int MASQUE_H3_PRIMARY_TIMEOUT_MS = 20_000;
     private static final int TRAFFIC_READY_TIMEOUT_MS = 4_000;
+    /**
+     * Per-probe budget for privacy-chain endpoints. A helper that just bootstrapped
+     * legitimately needs longer than the WARP-direct 4s: Tor's first request includes circuit
+     * selection, DNS over the chain and TLS, and every round trip also traverses the chain's
+     * carrier. dev.036 physical evidence: on a MASQUE-carried Tor chain every first probe
+     * timed out at 4s ("Read timed out") while Tor was fully ready and the underlay was
+     * validated; the same first-probe churn appeared on MASQUE-carried Psiphon chains
+     * (success only on attempt 2). WARP-direct endpoints keep the tight 4s budget whose
+     * bimodal dead-endpoint reasoning is unaffected.
+     */
+    private static final int CHAIN_TRAFFIC_READY_TIMEOUT_MS = 12_000;
     private static final int TRAFFIC_READY_ATTEMPTS = 2;
     /** A recovered core only has to prove the data plane once; the monitor owns the retry schedule. */
     private static final int RECOVERY_TRAFFIC_READY_ATTEMPTS = 1;
@@ -226,6 +131,36 @@ public final class AetherVpnService extends VpnService {
      * cover a core that starts normally, and the probe round that has to follow it.
      */
     private static final long MIN_TRAFFIC_READY_ROLL_BUDGET_MS = 14_000L;
+    /**
+     * Bound on waiting for Core's own privacy-listener announcements ("psiphon is ready",
+     * "tor is ready") before privacy endpoints are probed. Core only announces after the helper
+     * established a tunnel (Tunnels &gt; 0), which on a cold start means downloading the server list
+     * through the WARP tunnel first: observed 10-15s on SM-A556E. Probing before the announcement
+     * only produces ECONNREFUSED, which the gate would then misread as a bad endpoint pair and
+     * answer with a core restart that kills the bootstrapping helper — the exact death loop the
+     * September 30 dev.014 validation reproduced. Waiting for the announcement keeps the helper
+     * alive inside the same gate budget and watchdog; the WARP endpoints are unaffected because
+     * they are not privacy endpoints.
+     */
+    private static final long PRIVACY_ANNOUNCEMENT_TIMEOUT_MS = 30_000L;
+    /**
+     * Extra startup allowance while a full-device Tor chain bootstraps: Tor's first-run
+     * consensus download through the WARP underlay can take a minute or more, which would
+     * otherwise trip both the 30s announcement wait and the connect watchdog.
+     */
+    private static final long TOR_CHAIN_STARTUP_ALLOWANCE_MS = 120_000L;
+    /**
+     * dev.034 fix: extra startup allowance for a Psiphon chain whose carrier is a MASQUE
+     * tunnel (MASQUE, MIM, or Gool over MASQUE). Core v2.3.0 holds the Psiphon helper until
+     * the carrier tunnel validates ("psiphon is waiting for the tunnel") and then bootstraps
+     * its server list through that tunnel. On the dev.034 physical device the announcement
+     * measured 14.5s after the carrier opened on a fast link and exceeded the flat 30s
+     * window across consecutive attempts under load, with the chain confirmed alive after
+     * the gate expired; a slow carrier alone can consume the MASQUE startup budget before
+     * the helper even starts. The watchdog and the announcement wait both get this
+     * allowance, exactly as Tor chains get theirs.
+     */
+    private static final long MASQUE_CHAIN_STARTUP_ALLOWANCE_MS = 120_000L;
     private static final int MAX_RECONNECT_ATTEMPTS = 5;
     /** One extra full connect attempt after a clean teardown; see {@link #retryableConnectFailure}. */
     private static final int CONNECT_ATTEMPTS = 2;
@@ -262,8 +197,6 @@ public final class AetherVpnService extends VpnService {
     /** Worst case for {@link #stopAetherOnly()}: polite destroy, then forcible destroy. */
     private static final long CORE_STOP_WORST_CASE_MS = CORE_STOP_GRACE_MS * 2;
     private static final long CONNECT_RETRY_DELAY_MS = 600L;
-    private static final int MAX_GOOL_IRAN_RETRIES = 3;
-    private static final long GOOL_IRAN_RETRY_DELAY_MS = 350L;
     private static final int DEFAULT_MTU = 1360;
     private static final int MIN_MTU = 1280;
     private static final int MAX_MTU = 1500;
@@ -302,7 +235,7 @@ public final class AetherVpnService extends VpnService {
     private static final String TAG = "AetherVpnService";
 
     /**
-     * Live published state, or {@code null} while no service instance exists. Every UI
+     * Live published state, or {@code null} while no service instance exists. Every Aethon UI
      * surface runs in this same process, so the Quick Settings tile can read the real state here
      * instead of a SharedPreferences value that survives process death and goes stale.
      */
@@ -321,17 +254,21 @@ public final class AetherVpnService extends VpnService {
     private final AtomicLong generation = new AtomicLong();
     private final AtomicBoolean healthCheckRunning = new AtomicBoolean();
     private final AtomicLong locationLookupSequence = new AtomicLong();
+    private final ReadinessTrace readinessTrace = new ReadinessTrace();
+    private volatile ProbeCancellation[] activeTrafficProbes;
+    private volatile ProbeCancellation activePrivacyHealthProbe;
+    private volatile RuntimeTrafficPlan.Announcements privacyAnnouncements;
+    /** Public 1818/1819 relays that serve the published contract while Chain is the final egress. */
+    private PublicPortRelays publicRelays;
     private final AtomicBoolean recoveryRestartPending = new AtomicBoolean();
     private final AtomicBoolean connectWatchdogFired = new AtomicBoolean();
     private final Object runtimeLock = new Object();
     private final Object networkLock = new Object();
     private final Object logLock = new Object();
-    /** The WARP-then-Psiphon chain, or null when another protocol is in use. */
-    private SiphonChain siphonChain;
-
     private final StringBuilder logHistory = new StringBuilder();
     private final StringBuilder pendingLogs = new StringBuilder();
     private volatile Process aetherProcess;
+    private volatile ProxyMode.Listeners proxyListeners;
     private volatile ParcelFileDescriptor vpnInterface;
     private volatile boolean bridgeStarted;
     /** A bridge stop that exceeded {@link #BRIDGE_STOP_TIMEOUT_MS} and is still joining. */
@@ -342,6 +279,18 @@ public final class AetherVpnService extends VpnService {
     private volatile boolean killSwitch;
     private volatile boolean smartBenchmarking;
     private volatile boolean masqueH3GatewayUnavailable;
+    /**
+     * dev.034 strict Gool topology truth: the topology the RUNNING v2.3.0 Core actually
+     * established, derived only from the Core's own proof lines -
+     * "gool ready: masque {peer} carries wireguard {inner}" (Gool over MASQUE) or
+     * "establishing inner WARP tunnel (warp-in-warp)" (Classic). null until the Core
+     * proves one. A manual mode selection can never be silently overridden: the app maps
+     * the WiW endpoint variables only for Classic, and a preset AETHER_GOOL_MODE=classic
+     * only for Classic, so the Core has no path to fall back between the two.
+     */
+    private volatile String runtimeGoolTopology;
+    /** The exact Core line that proved the running Gool topology (disclosed in the log). */
+    private volatile String runtimeGoolTopologyProof;
     /** Elapsed-realtime instant at which the initial connect must have reached a terminal state. */
     private volatile long connectDeadlineAt;
     private volatile long connectDeadlineSession = -1L;
@@ -371,6 +320,14 @@ public final class AetherVpnService extends VpnService {
     private volatile boolean networkUnavailable;
     private volatile boolean connectionEstablished;
     private SharedPreferences stateStore;
+    /**
+     * dev.020 CHANGE 9: the daily connected-time accounting model. The service owns it because
+     * it alone knows the genuine Connected state; the Home UI only renders todaySeconds()
+     * once per second. Persisted in its own "connected_time" SharedPreferences (usage state,
+     * not a configuration preference - Reset Defaults must not erase it; performResetDefaults
+     * clears only the "aether" preferences).
+     */
+    private ConnectedTimeTracker connectedTime;
     private final LanProxyServer lanProxy = new LanProxyServer();
     private ConnectivityManager connectivityManager;
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
@@ -401,9 +358,14 @@ public final class AetherVpnService extends VpnService {
     @Override public void onCreate() {
         super.onCreate();
         stateStore = getSharedPreferences("service_state", MODE_PRIVATE);
+        connectedTime = new ConnectedTimeTracker(connectedTimeClock(), connectedTimeStore());
         selectedProtocol = stateStore.getString("selectedProtocol", "");
         smartSelected = stateStore.getBoolean("smartSelected", false);
         LIVE_STATE.set(currentState);
+        // dev.020 CHANGE 9: reconcile the accounting against the persisted checkpoints BEFORE
+        // any event can fire (a desired-connected auto-restart launches straight into
+        // "starting", which must not count as connected time until Connected publishes).
+        connectedTime.reconcile();
         String savedLogs = stateStore.getString("logs", "");
         if (savedLogs != null) logHistory.append(savedLogs);
         createNotificationChannel();
@@ -492,8 +454,10 @@ public final class AetherVpnService extends VpnService {
             }
             stateStore.edit().putBoolean("desiredConnected", true).apply();
             Intent request = new Intent(intent);
+            request.putExtra("socks", ProxyMode.socksAddress(value(request, "connectionMode", "vpn"),
+                    value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT)));
             if (isRedundantStart(request)) {
-                sendLog("Connect request ignored; the tunnel is already " + currentState + " with the same configuration");
+                sendLog("Connect request ignored; Aethon is already " + currentState + " with the same configuration");
                 sendStatus(currentState, currentMessage);
                 publishStats();
                 return START_STICKY;
@@ -558,11 +522,25 @@ public final class AetherVpnService extends VpnService {
      * teardown-and-retry pass before the error is surfaced.
      */
     private void runConnection(Intent request, long session) {
-        boolean smartRequested = ConnectionDefaults.SMART_PROTOCOL.equals(value(request, "requestedProtocol", ""))
-                || ConnectionDefaults.SMART_PROTOCOL.equals(value(request, "protocol", ""));
+        boolean smartRequested = usesWarp(request) && (ConnectionDefaults.SMART_PROTOCOL.equals(value(request, "requestedProtocol", ""))
+                || ConnectionDefaults.SMART_PROTOCOL.equals(value(request, "protocol", "")));
         String requestedTransport = value(request, "transport", ConnectionDefaults.TRANSPORT);
         for (int attempt = 1; ; attempt++) {
             armConnectDeadline(session, smartRequested);
+            long extraStartup = 0L;
+            if (usesWarp(request)) {
+                extraStartup = Math.max(0, request.getIntExtra("startupSecs", 30) - 30) * 1000L;
+                if ("mim".equals(value(request, "protocol", ""))) extraStartup += request.getIntExtra("startupSecs", 30) * 1000L;
+                // Chain bootstrap allowances: a full-device Tor chain downloads its consensus
+                // through the underlay on first run, and a Psiphon chain on a MASQUE carrier
+                // bootstraps its server list through a carrier that can itself consume the
+                // MASQUE startup budget. The watchdog and the announcement wait both get the
+                // matching allowance; see chainStartupAllowanceMs.
+                extraStartup += chainStartupAllowanceMs(value(request, "protocol", ConnectionDefaults.PROTOCOL),
+                        ProxyMode.settings(value(request, "connectionMode", "vpn"),
+                                AndroidCoreSettings.fromIntent(request)));
+            }
+            connectDeadlineAt += extraStartup;
             boolean publishedConnected = false;
             try {
                 publishedConnected = runConnectionAttempt(request, session, attempt, attempt == 1 && smartRequested);
@@ -590,14 +568,14 @@ public final class AetherVpnService extends VpnService {
 
     /**
      * A retry is only worth the extra wait when a clean restart can plausibly change the outcome.
-     * Configuration mistakes, cancellations, exit-country policy rejections, a missing native core,
+     * Configuration mistakes, cancellations, occupied proxy ports, a missing native core,
      * and failures of an already-proven session are deterministic or already-reported, so retrying
      * them only delays the error the user needs to see.
      */
     static boolean retryableConnectFailure(String failureType, String message) {
         if ("InterruptedException".equals(failureType)) return false;
         if ("IllegalArgumentException".equals(failureType)) return false;
-        if ("GoolExitException".equals(failureType)) return false;
+        if ("ProxyPortException".equals(failureType)) return false;
         if ("SupervisedSessionException".equals(failureType)) return false;
         return message == null || !message.contains("Aether core is missing");
     }
@@ -611,7 +589,7 @@ public final class AetherVpnService extends VpnService {
     private boolean prepareRetry(Intent request, long session, String requestedTransport) {
         stopRuntime();
         reapOrphanedCores();
-        awaitSocksPortReleased(coreSocksAddress(request));
+        awaitSocksPortReleased(value(request, "socks", "127.0.0.1:1819"));
         masqueH3GatewayUnavailable = false;
         connectionEstablished = false;
         recoveryRestartPending.set(false);
@@ -627,7 +605,8 @@ public final class AetherVpnService extends VpnService {
     private void publishConnectionFailure(Intent request, long session, Exception error) {
         boolean timedOut = connectTimedOutSession == session;
         String reason = timedOut ? getString(R.string.service_connect_timeout)
-                : error instanceof GoolExitException ? safeMessage(error) : getString(R.string.status_error);
+                : error instanceof ProxyStartupException || error.getCause() instanceof ProxyStartupException
+                ? safeMessage(error) : getString(R.string.status_error);
         if (killSwitch && vpnInterface != null && !stopping) {
             stopAetherOnly();
             updateState("blocked", getString(R.string.service_blocked));
@@ -659,8 +638,8 @@ public final class AetherVpnService extends VpnService {
         sendLog("Performance connect service_pipeline_start=" + elapsedSinceRequest(request) + "ms attempt=" + attempt);
         currentEndpoint = reliableEndpoint(request);
         String connectionMode = value(request, "connectionMode", "vpn");
-        smartSelected = ConnectionDefaults.SMART_PROTOCOL.equals(value(request, "requestedProtocol", ""));
-        if (runSmartSelection) {
+        smartSelected = usesWarp(request) && ConnectionDefaults.SMART_PROTOCOL.equals(value(request, "requestedProtocol", ""));
+        if (runSmartSelection && usesWarp(request)) {
             updateState("smart-testing", getString(R.string.service_smart_testing));
             String protocol = chooseSmartProtocol(request, session);
             request.putExtra("protocol", protocol);
@@ -672,44 +651,13 @@ public final class AetherVpnService extends VpnService {
         } else selectedProtocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
         updateState("starting", getString(R.string.service_launching));
         updateState("scanning", getString(R.string.service_scanning));
-
-          boolean chained = "siphon".equals(selectedProtocol);  // a chained session shapes the whole order below  // set before the loop: a chained session shapes the order below
-          if (chained) {
-              // Order is forced by Psiphon, not by taste, and getting it wrong
-              // costs a 13-second restart loop rather than an error:
-              //
-              //  1. the TUN first, before either tunnel. Psiphon's NetworkMonitor
-              //     reads tun0 appearing as a network change and restarts the Go
-              //     controller, so a TUN created after Psiphon starts tears the
-              //     tunnel down as soon as it appears.
-              //  2. the WARP leg next, and we wait for it: Psiphon validates
-              //     UpstreamProxyURL by dialling it, so starting Psiphon against a
-              //     proxy whose tunnel is not up yet fails the rung outright.
-              //  3. Psiphon last. The bridge attaches from its own onConnected(),
-              //     so device traffic only ever reaches a tunnel that is carrying.
-              // Mark the request as a chain BEFORE the TUN is established, not
-              // after. establishVpn reads the flag to decide whether to attach
-              // the bridge at all, so setting it afterwards meant the bridge
-              // started immediately — against 1819, the default, with udp: udp —
-              // and then attachChainBridge's TProxyStartService was a no-op
-              // because upstream refuses to start a second bridge while one
-              // exists. The first bridge kept running, pointed at whatever
-              // landed on 1819, which is Psiphon. That is the whole of the
-              // 0x03 flood: Psiphon's SOCKS answering a UDP ASSOCIATE that
-              // survived from a config written for a session that had no chain.
-              request.putExtra(EXTRA_CHAIN_LEG, true);
-              if (!establishVpn(request, session)) return false;
-              if (!startSiphonChain(request, session)) return false;
-              sendLog("Performance psiphon_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
-          } else {
-              boolean socksReady = startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS);
-              ensureConnectNotTimedOut(session);
-              if (!socksReady) {
-                  throw new IllegalStateException(aetherExitMessage("Aether did not open its SOCKS5 listener"));
-              }
-              if (!isCurrentSession(request, session)) return false;
-              sendLog("Performance core_and_socks_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+        boolean socksReady = startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS, session);
+        ensureConnectNotTimedOut(session);
+        if (!socksReady) {
+            throw new IllegalStateException(aetherExitMessage("Aether did not open its SOCKS5 listener"));
         }
+        if (!isCurrentSession(request, session)) return false;
+        sendLog("Performance core_and_socks_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
 
         if ("automatic".equals(VpnConnectionController.normalizedMtuMode(value(request, "mtuMode", "manual")))) {
             long mtuStarted = SystemClock.elapsedRealtime();
@@ -725,32 +673,28 @@ public final class AetherVpnService extends VpnService {
 
         // Never publish a prior session's endpoint while this session is being resolved.
         currentEndpoint = getString(R.string.location_detecting);
-        boolean gool = "gool".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL));
+        boolean gool = usesWarp(request) && "gool".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL));
         connectionEstablished = true;
         if ("manual".equals(connectionMode)) {
             if (!isCurrentSession(request, session)) return false;
             updateState("securing", getString(R.string.service_traffic_checking));
             if (!establishProvenDataPlane(request, session, pipelineStarted)) return false;
+            startPublicRelays(request);
             ensureConnectNotTimedOut(session);
             connectedAt = System.currentTimeMillis();
             updateState("connected", getString(R.string.service_proxy_ready));
             updateNotification(getString(R.string.service_proxy_connected));
             publishedConnected = true;
         } else {
-            // The chained path already established the TUN before Psiphon started,
-            // because a TUN appearing afterwards restarts Psiphon. Establishing a
-            // second one here would also replace the descriptor out from under it.
-
-            if (!chained) {
-                if (!establishVpn(request, session)) return false;
-            }
+            if (!establishVpn(request, session)) return false;
             sendLog("Performance tun_and_routing_ready=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
             updateState("securing", getString(R.string.service_traffic_checking));
             if (!establishProvenDataPlane(request, session, pipelineStarted)) return false;
+            startPublicRelays(request);
             ensureConnectNotTimedOut(session);
             connectedAt = System.currentTimeMillis();
             updateState("connected", getString(R.string.service_protected));
-            updateNotification(getString(smartSelected ? R.string.service_smart_protected : R.string.service_vpn_protected));
+            updateNotification(getString(smartSelected ? R.string.service_smart_protected : R.string.service_aethon_protected));
             publishedConnected = true;
         }
         clearConnectDeadline(session);
@@ -761,12 +705,13 @@ public final class AetherVpnService extends VpnService {
         // scheduler tick; the probe still uses the real SOCKS path and never reuses stale data.
         maybeCheckTunnelHealth();
         if (request.getBooleanExtra("lanEnabled", false)) {
-            startLanSharing(request.getIntExtra("lanPort", 18190), deviceSocksAddress(request));
+            startLanSharing(request.getIntExtra("lanPort", 18190), value(request, "socks", "127.0.0.1:1819"));
             sendStatus(currentState, currentMessage);
         }
         worker.execute(() -> NetworkDiagnostics.run(this, value(request, "protocol", "masque")));
         if (gool) scheduleGoolExitLookup(request, session, pipelineStarted);
         else scheduleLocationLookup(request, session);
+        if (gool) discloseGoolTopology(request);
         try {
             monitorAether(request, session);
         } catch (Exception supervised) {
@@ -782,6 +727,32 @@ public final class AetherVpnService extends VpnService {
         connectTimedOutSession = -1L;
         connectDeadlineSession = session;
         connectDeadlineAt = SystemClock.elapsedRealtime() + (smart ? SMART_CONNECT_WATCHDOG_MS : CONNECT_WATCHDOG_MS);
+    }
+
+    /**
+     * dev.034: truthful disclosure of the Gool topology after Connected. The requested mode and
+     * the topology the Core proved from its own log lines are stated together; because the app
+     * never maps the classic-only variables while Gool over MASQUE is selected (and vice versa),
+     * a mismatch would mean the Core fell back on its own - which is surfaced here as the exact
+     * mismatch, never as a quiet success of the requested mode.
+     */
+    private void discloseGoolTopology(Intent request) {
+        boolean classicRequested = "classic".equals(CoreSettings.string(AndroidCoreSettings.fromIntent(request), "goolMode"));
+        String requested = classicRequested ? "Classic Gool (WARP-in-WARP)" : "Gool over MASQUE";
+        String topology = runtimeGoolTopology;
+        if (topology == null) {
+            sendLog("Gool topology: requested " + requested + "; the Core has not printed its topology proof line");
+            return;
+        }
+        String running = "classic".equals(topology) ? "Classic Gool (WARP-in-WARP)" : "Gool over MASQUE";
+        sendLog("Gool topology proof: requested " + requested + ", running " + running
+                + " (core: " + runtimeGoolTopologyProof + ")");
+        if (!topology.equals(classicRequested ? "classic" : "masque")) {
+            // By construction this cannot happen (the Core's gool_classic() is driven only by
+            // variables the app maps for the matching mode); if it ever does, the mismatch is
+            // disclosed, not buried - a fallback result can never verify the requested topology.
+            sendLog("Gool topology MISMATCH: the Core is not running the requested topology");
+        }
     }
 
     private void clearConnectDeadline(long session) {
@@ -899,6 +870,8 @@ public final class AetherVpnService extends VpnService {
      */
     private boolean establishProvenDataPlane(Intent request, long session, long pipelineStarted)
             throws Exception {
+        if (!usesWarp(request))
+            return validateTrafficReady(request, session, pipelineStarted, TRAFFIC_READY_ATTEMPTS);
         long deadline = trafficGateDeadline(session);
         Exception unproven = null;
         for (int roll = 0; roll <= TRAFFIC_READY_ENDPOINT_ROLLS; roll++) {
@@ -922,22 +895,21 @@ public final class AetherVpnService extends VpnService {
                 break;
             }
             if (!isCurrentSession(request, session)) return false;
-            if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
-                // Never restart the core under Psiphon.
-                //
-                // The core is Psiphon's upstream. Re-rolling it means stopAetherOnly,
-                // which closes 1820 while Psiphon is mid-handshake with a server, and
-                // every one of those comes back "connect: connection refused" — a
-                // self-inflicted failure the next roll then repeats. A bad Cloudflare edge
-                // is also the wrong diagnosis here: the ladder exists to move off a bad
-                // WARP leg, and it runs before Psiphon starts at all.
-                sendLog("Traffic gate will not re-roll: a chain's core is Psiphon's "
-                        + "upstream, and restarting it fails every tunnel in flight");
-                break;
-            }
             String diagnosis = diagnoseTunnel(request);
             if (diagnosis != null) {
                 sendLog("Traffic gate will not re-roll: " + diagnosis);
+                break;
+            }
+            // A privacy helper that is still bootstrapping (its listeners not yet announced) is
+            // killed by a core restart, and the replacement has to start its own bootstrap from
+            // scratch — the September 30 dev.014 validation reproduced exactly that loop: five
+            // re-rolls, each one killing the psiphon helper a few seconds before it would have
+            // announced. While announcements are outstanding, a re-roll cannot be the cure, so
+            // the original privacy failure propagates instead of restarting the core.
+            RuntimeTrafficPlan.Announcements announcements = privacyAnnouncements;
+            if (announcements != null && !announcements.allAnnounced()) {
+                sendLog("Traffic gate will not re-roll: privacy helper is still bootstrapping"
+                        + " (" + safeMessage(unproven) + "); waiting cannot be fixed by a core restart");
                 break;
             }
             sendLog("Traffic gate re-roll " + (roll + 1) + "/" + TRAFFIC_READY_ENDPOINT_ROLLS
@@ -946,7 +918,7 @@ public final class AetherVpnService extends VpnService {
                     + remaining + "ms left");
             updateState("securing", getString(R.string.service_testing_gateways));
             stopAetherOnly();
-            awaitSocksPortReleased(coreSocksAddress(request));
+            awaitSocksPortReleased(value(request, "socks", "127.0.0.1:1819"));
             sleepQuietly(TRAFFIC_READY_ROLL_SETTLE_MS);
             ensureConnectNotTimedOut(session);
             if (!isCurrentSession(request, session)) return false;
@@ -954,7 +926,7 @@ public final class AetherVpnService extends VpnService {
             // gate never spends its last second waiting on a listener it will not get to test.
             long socksWait = Math.min(ROLL_SOCKS_TIMEOUT_MS,
                     deadline - SystemClock.elapsedRealtime() - TRAFFIC_READY_TIMEOUT_MS);
-            if (socksWait <= 0L || !startAetherWithMasqueFallback(request, socksWait)) {
+            if (socksWait <= 0L || !startAetherWithMasqueFallback(request, socksWait, session)) {
                 sendLog("Re-rolled core did not open its SOCKS listener within "
                         + Math.max(0L, socksWait) + "ms");
                 break;
@@ -976,7 +948,7 @@ public final class AetherVpnService extends VpnService {
         if (process == null) return "the core process is gone";
         if (!process.isAlive()) return "the core process exited with status " + exitStatus(process);
         if (masqueH3GatewayUnavailable) return "MASQUE reported no usable gateway";
-        String socks = coreSocksAddress(request);
+        String socks = value(request, "socks", "127.0.0.1:1819");
         try {
             if (!socksHandshakeSucceeds(HostPort.parse(socks))) {
                 return "the core stopped accepting SOCKS5 on " + socks;
@@ -1018,7 +990,13 @@ public final class AetherVpnService extends VpnService {
      * endpoint back into the abrupt failure this fix exists to remove.
      */
     static long worstCaseTrafficGateMs() {
-        return TRAFFIC_READY_TOTAL_BUDGET_MS + TRAFFIC_READY_TIMEOUT_MS;
+        return TRAFFIC_READY_TOTAL_BUDGET_MS
+                + Math.max(TRAFFIC_READY_TIMEOUT_MS, CHAIN_TRAFFIC_READY_TIMEOUT_MS);
+    }
+
+    /** Probe budgets published for tests: {WARP-direct, privacy-chain}. */
+    static int[] trafficProbeTimeouts() {
+        return new int[]{TRAFFIC_READY_TIMEOUT_MS, CHAIN_TRAFFIC_READY_TIMEOUT_MS};
     }
 
     /** Bounds published for tests: {rolls, first-gate attempts, per-roll attempts}. */
@@ -1039,59 +1017,176 @@ public final class AetherVpnService extends VpnService {
         return new long[]{BRIDGE_STOP_TIMEOUT_MS, BRIDGE_HANDOVER_TIMEOUT_MS, CORE_STOP_WORST_CASE_MS};
     }
 
+    /**
+     * Waits, bounded by {@link #PRIVACY_ANNOUNCEMENT_TIMEOUT_MS}, for the current Core to announce
+     * every privacy listener. Returns false when the session was superseded. The wait is on Core's
+     * own readiness line, so a helper that cannot establish a tunnel still turns into an honest
+     * gate failure with a reason ("privacy listeners were not announced") rather than a probe
+     * error that invites a core restart — restarting cannot help a bootstrapping helper.
+     */
+    private boolean awaitPrivacyAnnouncements(Intent request, long session) {
+        RuntimeTrafficPlan.Announcements announcements = privacyAnnouncements;
+        if (announcements == null) return isCurrentSession(request, session);
+        long timeout = privacyAnnouncementTimeoutMs(value(request, "protocol", ConnectionDefaults.PROTOCOL),
+                ProxyMode.settings(value(request, "connectionMode", "vpn"),
+                        AndroidCoreSettings.fromIntent(request)));
+        long deadline = SystemClock.elapsedRealtime() + timeout;
+        while (!announcements.allAnnounced()) {
+            if (!isCurrentSession(request, session)) return false;
+            Process process = aetherProcess;
+            if (process == null || !process.isAlive()) {
+                throw new IllegalStateException("Core exited before announcing its privacy listeners");
+            }
+            if (SystemClock.elapsedRealtime() >= deadline) {
+                throw new IllegalStateException("Psiphon/Tor privacy listeners were not announced by the Core within "
+                        + timeout + "ms; the helper could not establish its tunnel");
+            }
+            sleepQuietly(250);
+        }
+        return isCurrentSession(request, session);
+    }
+
+    /**
+     * Startup allowance for a full-device privacy chain whose helper bootstraps through a
+     * carrier that is itself slow to establish. Tor chains download the consensus through the
+     * underlay (120s); a Psiphon chain on a MASQUE carrier bootstraps its server list through
+     * the carrier tunnel, which on a slow H2 network is the difference between a bounded,
+     * honest wait and a first-attempt failure that the dev.034 physical validation reproduced.
+     * Plain WARP-based chains keep the base window: the fast underlay leaves the helper the
+     * full 30s.
+     *
+     * <p>The protocol is a parameter, never read from {@code settings}: the maps produced by
+     * {@link AndroidCoreSettings#fromIntent} carry only keys listed in
+     * {@code CoreSettings.DEFAULTS}, which deliberately does not include {@code protocol} (the
+     * service intent's protocol string travels beside the map, exactly as every other
+     * protocol-dependent call site passes it). A dev.035 draft of this helper read the protocol
+     * from the map, so the allowance never applied and the gate stayed at 30s; the physical
+     * re-validation caught it.
+     */
+    static long chainStartupAllowanceMs(String protocol, Map<String, Object> settings) {
+        if (TorChainRouting.chainActive(settings)) return TOR_CHAIN_STARTUP_ALLOWANCE_MS;
+        if (PsiphonChainRouting.chainActive(settings)
+                && CoreSettings.masqueCarrier(protocol, settings))
+            return MASQUE_CHAIN_STARTUP_ALLOWANCE_MS;
+        return 0L;
+    }
+
+    /** The privacy-announcement window for a chain: base timeout plus its startup allowance. */
+    static long privacyAnnouncementTimeoutMs(String protocol, Map<String, Object> settings) {
+        return PRIVACY_ANNOUNCEMENT_TIMEOUT_MS + chainStartupAllowanceMs(protocol, settings);
+    }
+
+    /** Bounds published for tests: {base timeout, Tor allowance, MASQUE-carrier allowance}. */
+    static long[] privacyAnnouncementBounds() {
+        return new long[]{PRIVACY_ANNOUNCEMENT_TIMEOUT_MS, TOR_CHAIN_STARTUP_ALLOWANCE_MS,
+                MASQUE_CHAIN_STARTUP_ALLOWANCE_MS};
+    }
+
     private boolean validateTrafficReady(Intent request, long session, long pipelineStarted, int attempts) throws Exception {
-        String socks = deviceSocksAddress(request);
-        final boolean chainLeg = request.getBooleanExtra(EXTRA_CHAIN_LEG, false);
+        String socks = value(request, "socks", "127.0.0.1:1819");
+        java.util.List<RuntimeTrafficPlan.Endpoint> endpoints = RuntimeTrafficPlan.endpoints(
+                ProxyMode.settings(value(request, "connectionMode", "vpn"), AndroidCoreSettings.fromIntent(request)), socks);
+        // Privacy listeners (Psiphon/Tor side proxies) only bind once their helper established a
+        // tunnel, which Core announces in its log ("psiphon is ready; ..."). Probing them before
+        // that announcement is ECONNREFUSED by design, not a broken data plane, so wait for the
+        // announcement here instead of letting the probe round fail into a core restart that
+        // would kill the bootstrapping helper. WARP endpoints announce nothing and skip the wait.
+        if (!awaitPrivacyAnnouncements(request, session)) return false;
         Exception last = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             if (!isCurrentSession(request, session)) return false;
+            Process provingProcess = aetherProcess;
+            RuntimeTrafficPlan.Announcements announcements = privacyAnnouncements;
+            RuntimeTrafficPlan.Proof proof = new RuntimeTrafficPlan.Proof(endpoints);
             // The targets are independent operators, so they are raced instead of tried in sequence.
             // Serially, one blocked or black-holed target spent the whole per-target timeout before
             // the next was even attempted, so an attempt could cost three timeouts on the critical
             // path; raced, an attempt costs one, and the first proven target publishes Connected.
-            CompletionService<String> race = new ExecutorCompletionService<>(worker);
-            for (String[] target : TRAFFIC_READY_TARGETS) {
-                final String host = target[0];
-                final String path = target[1];
-                race.submit(() -> {
-                    long started = SystemClock.elapsedRealtime();
-                    try {
-                        // A chain's device traffic reaches the internet through the
-                        // TUN, and this app is excluded from it, so a direct SOCKS
-                        // dial proves the tunnel and nothing about the bridge.
-                        //
-                        // That gap is not theoretical. A /30 too small to hold the
-                        // bridge's own address published "connected" with a German
-                        // exit and dropped every packet — and this gate is what
-                        // called that a success. So on a chain the proof has to be
-                        // a real flow through 10.0.0.2, which only the bridge can
-                        // carry.
-                        String body = chainLeg
-                                ? tunTrafficProof(request, host, path, TRAFFIC_READY_TIMEOUT_MS)
-                                : socksHttpGet(socks, host, path, TRAFFIC_READY_TIMEOUT_MS);
-                        if (body.trim().isEmpty()) throw new IllegalStateException("HTTPS response body was empty");
-                    } catch (Exception error) {
-                        throw new IllegalStateException("host=" + host + " " + safeMessage(error), error);
-                    }
-                    return "host=" + host + " latency=" + (SystemClock.elapsedRealtime() - started) + "ms";
-                });
-            }
-            for (int completed = 0; completed < TRAFFIC_READY_TARGETS.length; completed++) {
-                try {
-                    String proven = race.take().get();
-                    sendLog("Performance traffic_ready attempt=" + attempt + " " + proven
-                            + " total=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
-                    return true;
-                } catch (ExecutionException failed) {
-                    Throwable cause = failed.getCause();
-                    last = cause instanceof Exception ? (Exception) cause
-                            : new IllegalStateException(safeMessage(cause));
-                    sendLog("Real traffic validation attempt " + attempt + "/" + attempts
-                            + " " + safeMessage(last));
+            CompletionService<TrafficResult> race = new ExecutorCompletionService<>(worker);
+            ProbeCancellation[] probes = new ProbeCancellation[endpoints.size()];
+            for (int index = 0; index < probes.length; index++) probes[index] = new ProbeCancellation();
+            activeTrafficProbes = probes;
+            try {
+                for (int index = 0; index < endpoints.size(); index++) {
+                  final int endpointIndex = index;
+                  final RuntimeTrafficPlan.Endpoint endpoint = endpoints.get(index);
+                  final ProbeCancellation cancellation = probes[index];
+                    for (String[] target : TRAFFIC_READY_TARGETS) {
+                    final String host = target[0];
+                    final String path = target[1];
+                    // dev.037: a privacy listener whose helper just bootstrapped gets the
+                    // chain probe budget - see CHAIN_TRAFFIC_READY_TIMEOUT_MS.
+                    final int probeTimeoutMs = endpoint.privacy
+                            ? CHAIN_TRAFFIC_READY_TIMEOUT_MS : TRAFFIC_READY_TIMEOUT_MS;
+                    cancellation.track(race.submit(() -> {
+                        long started = SystemClock.elapsedRealtime();
+                        try {
+                            String body = proxyHttpGet(endpoint.address,
+                                    host, path, probeTimeoutMs, endpoint.http, cancellation);
+                            if (body.trim().isEmpty()) throw new IllegalStateException("HTTPS response body was empty");
+                            return new TrafficResult(endpointIndex, host, body, SystemClock.elapsedRealtime() - started);
+                        } catch (Exception error) {
+                            throw new IllegalStateException(endpoint.name
+                                    + " host=" + host + " " + safeMessage(error), error);
+                        }
+                    }));
+                  }
                 }
+                for (int completed = 0; completed < TRAFFIC_READY_TARGETS.length * endpoints.size(); completed++) {
+                    try {
+                        TrafficResult proven = race.take().get();
+                        if (!isCurrentSession(request, session)) return false;
+                        if (provingProcess == null || provingProcess != aetherProcess || !provingProcess.isAlive()) {
+                            throw new IllegalStateException("Core changed during traffic validation");
+                        }
+                        RuntimeTrafficPlan.Endpoint endpoint = endpoints.get(proven.endpointIndex);
+                        if (announcements == null || announcements != privacyAnnouncements || !announcements.announced(endpoint)) {
+                            last = new IllegalStateException(endpoint.name + " was not announced by the current Core");
+                            continue;
+                        }
+                        if (endpoint.primary && "www.cloudflare.com".equals(proven.host)) {
+                            readinessTrace.remember(provingProcess, session, SystemClock.elapsedRealtime(), proven.body);
+                        }
+                        // A successful protocol no longer needs its other targets. Interrupting a
+                        // Future alone cannot unblock a socket read, so close its sockets as well.
+                        probes[proven.endpointIndex].close();
+                        sendLog("Performance traffic_ready attempt=" + attempt + " "
+                                + endpoint.name + " host=" + proven.host
+                                + " latency=" + proven.latencyMs + "ms"
+                                + " total=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+                        if (proof.record(endpoint)) {
+                            if (!announcements.allAnnounced()) continue;
+                            if (!isCurrentSession(request, session)) return false;
+                            if (provingProcess == null || provingProcess != aetherProcess || !provingProcess.isAlive()) {
+                                throw new IllegalStateException("Core changed during traffic validation");
+                            }
+                            return true;
+                        }
+                    } catch (CancellationException cancelled) {
+                        if (!isCurrentSession(request, session)) return false;
+                    } catch (ExecutionException failed) {
+                        Throwable cause = failed.getCause();
+                        last = cause instanceof Exception ? (Exception) cause
+                                : new IllegalStateException(safeMessage(cause));
+                        sendLog("Real traffic validation attempt " + attempt + "/" + attempts
+                                + " " + safeMessage(last));
+                    }
+                }
+            } finally {
+                for (ProbeCancellation probe : probes) probe.close();
+                if (activeTrafficProbes == probes) activeTrafficProbes = null;
             }
         }
         throw new IllegalStateException("Real traffic validation failed", last);
+    }
+
+    private static final class TrafficResult {
+        final int endpointIndex;
+        final String host, body;
+        final long latencyMs;
+        TrafficResult(int endpointIndex, String host, String body, long latencyMs) {
+            this.endpointIndex = endpointIndex; this.host = host; this.body = body; this.latencyMs = latencyMs;
+        }
     }
 
     /**
@@ -1131,7 +1226,7 @@ public final class AetherVpnService extends VpnService {
         int[] usable = usableMtuCandidates(ceiling);
         sendLog("MTU automatic probing protocol=" + protocol + " link_mtu=" + (linkMtu > 0 ? linkMtu : -1)
                 + " ceiling=" + ceiling + " candidates=" + Arrays.toString(usable));
-        String socks = coreSocksAddress(request);
+        String socks = value(request, "socks", "127.0.0.1:1819");
         int lo = 0;
         int hi = usable.length - 1;
         int best = -1;
@@ -1248,7 +1343,7 @@ public final class AetherVpnService extends VpnService {
             try (SSLSocket ssl = verifiedTlsSocket(factory, tunnel, "example.com", 443, timeoutMs)) {
                 StringBuilder padding = new StringBuilder(Math.max(64, candidate));
                 while (padding.length() < candidate) padding.append('a');
-                byte[] payload = ("GET / HTTP/1.1\r\nHost: example.com\r\nX-Mehmanshahr-MTU-Probe: " + padding
+                byte[] payload = ("GET / HTTP/1.1\r\nHost: example.com\r\nX-Aethon-MTU-Probe: " + padding
                         + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
                 OutputStream output = ssl.getOutputStream();
                 output.write(payload);
@@ -1282,11 +1377,13 @@ public final class AetherVpnService extends VpnService {
     private void scheduleGoolExitLookup(Intent request, long session, long pipelineStarted) {
         long lookup = locationLookupSequence.incrementAndGet();
         worker.execute(() -> {
+            long started = SystemClock.elapsedRealtime();
             try {
-                GoolExit exit = selectAcceptedGoolExit(request, session);
+                if (!isLocationLookupCurrent(lookup, session)) return;
+                GoolExit exit = lookupGoolExit(request, session);
                 if (exit == null || !isLocationLookupCurrent(lookup, session)) return;
                 currentEndpoint = exit.location;
-                sendLog("Performance gool_exit_validated=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
+                sendLog("Performance gool_location_detected=" + (SystemClock.elapsedRealtime() - pipelineStarted) + "ms");
                 sendLog("VPN location detected: " + exit.location + " exit_ip=" + exit.address + " country=" + exit.countryCode);
                 sendStatus(currentState, currentMessage);
             } catch (Throwable error) {
@@ -1294,6 +1391,8 @@ public final class AetherVpnService extends VpnService {
                 currentEndpoint = getString(R.string.connection_location_unavailable);
                 sendLog("VPN location state=unavailable: " + safeMessage(error));
                 sendStatus(currentState, currentMessage);
+            } finally {
+                sendLog("Performance location_lookup=" + (SystemClock.elapsedRealtime() - started) + "ms protocol=gool");
             }
         });
     }
@@ -1303,23 +1402,6 @@ public final class AetherVpnService extends VpnService {
     }
 
     private boolean establishVpn(Intent request, long session) throws Exception {
-        return establishVpn(request, session, !request.getBooleanExtra(EXTRA_CHAIN_LEG, false));
-    }
-
-    /**
-     * Build the TUN, and attach the bridge only when this session is not a chain.
-     *
-     * The split is the chain's whole shape. The TUN has to exist before Psiphon
-     * starts — Psiphon's NetworkMonitor reads tun0 appearing as a network change
-     * and restarts the controller — but the bridge must not attach until Psiphon
-     * has its own listener, because attaching earlier points the bridge at
-     * whichever port exists now rather than the one that ends up carrying. In
-     * the field that was the core's 1820 with nothing on the far side of it: the
-     * tunnel published "connected" and the location probe came back IR, straight
-     * off the carrier.
-     */
-    private boolean establishVpn(Intent request, long session, boolean attachBridge)
-            throws Exception {
         // IPv6 is captured unconditionally. The TUN and its route table are built exactly once per
         // session and are never rebuilt on a network change - recovery only restarts the Aether core
         // - so deciding capture from the network that happens to be up at establish() time left a
@@ -1334,13 +1416,11 @@ public final class AetherVpnService extends VpnService {
                 .setSession(getString(R.string.app_name))
                 .setMtu(effectiveMtu(request))
                 .setBlocking(false)
-                .addAddress(HEV_TUN_ADDRESS, HEV_TUN_PREFIX)
-                .addAddress(HEV_TUN_ADDRESS_V6, HEV_TUN_PREFIX_V6);
+                .addAddress("198.18.0.1", 30)
+                .addAddress("fc00::1", 126);
 
         String routing = value(request, "routing", "bypass-local");
-        if ("bypass-local".equals(routing)) {
-            addPublicRoutes(builder, request.getBooleanExtra(EXTRA_CHAIN_LEG, false));
-        }
+        if ("bypass-local".equals(routing)) addPublicRoutes(builder);
         else {
             builder.addRoute("0.0.0.0", 0);
             builder.addRoute("::", 0);
@@ -1350,16 +1430,11 @@ public final class AetherVpnService extends VpnService {
             // Both resolvers are public addresses covered by the tunnel routes above, so every
             // lookup - including the hostname behind Android Private DNS - is carried inside the
             // tunnel and no query reaches the carrier resolver.
-            //
-            // On a chain they are HEV's own mapped resolver instead. Pointing the TUN at
-            // 1.1.1.1 would send every query straight back out as UDP, and UDP is the one
-            // thing Psiphon's SOCKS cannot carry — each one came back as a rejected
-            // SOCKS5 command. 198.18.0.2 is answered inside the bridge and only leaves
-            // as a real query on a cache miss.
-            if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
-                builder.addDnsServer(HEV_ROUTER_DNS);
-            } else {
-                builder.addDnsServer("1.1.1.1").addDnsServer("1.0.0.1");
+            String dns = value(request, "dns", "").trim();
+            for (String resolver : (dns.isEmpty() ? "1.1.1.1,1.0.0.1" : dns).split(",")) {
+                String address = resolver.trim();
+                builder.addDnsServer(address);
+                builder.addRoute(address, address.contains(":") ? 128 : 32);
             }
         } else {
             // The VPN declares no resolver, so Android falls back to the underlying network's DNS.
@@ -1388,32 +1463,28 @@ public final class AetherVpnService extends VpnService {
             }
             // A bridge stop that overran its bound leaves the previous tunnel worker alive, and
             // upstream TProxyStartService is a no-op while one exists. Starting on top of it would
-            if (attachBridge) {
-                // publish a tunnel that silently carries nothing, so fail the attempt explicitly.
-                if (!awaitBridgeHandover()) {
-                    throw new IllegalStateException("The previous tunnel bridge has not shut down yet");
-                }
-                try {
-                    TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
-                } catch (UnsatisfiedLinkError error) {
-                    throw new IllegalStateException("The HEV Android JNI bridge could not be loaded", error);
-                }
-                boolean orphaned;
-                synchronized (runtimeLock) {
-                    // A teardown replaced or cleared the descriptor while the bridge was starting; the
-                    // bridge it just attached to is now orphaned and has to be stopped here.
-                    orphaned = vpnInterface != descriptor;
-                    if (!orphaned) bridgeStarted = true;
-                }
-                // Deliberately outside runtimeLock, for the reason stopBridge() documents.
-                if (orphaned) { stopBridge(); return false; }
-                sendLog("HEV Android TUN bridge started");
-                return isCurrentSession(request, session);
+            // publish a tunnel that silently carries nothing, so fail the attempt explicitly.
+            if (!awaitBridgeHandover()) {
+                throw new IllegalStateException("The previous tunnel bridge has not shut down yet");
             }
-            // A chain has no bridge yet. startSiphonChain attaches it once
-            // Psiphon reports its own listener, which is the only port that
-            // carries, so the TUN exists at this point and nothing is attached
-            // to it. That is deliberate and is why the interface is not rebuilt.
+            try {
+                File nativeDirectory = new File(getApplicationInfo().nativeLibraryDir);
+                String abi = CoreIntegrity.verify(new File(nativeDirectory, "libaether.so"));
+                NativeIntegrity.verify(new File(nativeDirectory, NativeIntegrity.HEV), abi);
+                TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
+            } catch (UnsatisfiedLinkError error) {
+                throw new IllegalStateException("The HEV Android JNI bridge could not be loaded", error);
+            }
+            boolean orphaned;
+            synchronized (runtimeLock) {
+                // A teardown replaced or cleared the descriptor while the bridge was starting; the
+                // bridge it just attached to is now orphaned and has to be stopped here.
+                orphaned = vpnInterface != descriptor;
+                if (!orphaned) bridgeStarted = true;
+            }
+            // Deliberately outside runtimeLock, for the reason stopBridge() documents.
+            if (orphaned) { stopBridge(); return false; }
+            sendLog("HEV Android TUN bridge started");
             return isCurrentSession(request, session);
         } finally {
             if (!adopted) {
@@ -1425,8 +1496,8 @@ public final class AetherVpnService extends VpnService {
 
     /**
      * Kills Aether cores left behind by a previous session or a process death. Android mounts
-     * /proc with hidepid, so only this app's own children are visible and killable, which is
-     * exactly the set that can still be holding the SOCKS port or an upstream socket. A leftover
+     * /proc with hidepid. Verify both the app UID and exact executable before terminating a
+     * process; a matching command-line substring does not establish ownership. A leftover
      * listener is what makes a later connect appear ready while carrying no traffic, and is the
      * documented cause of "multiple Connect attempts" and "airplane mode toggle required".
      */
@@ -1434,6 +1505,12 @@ public final class AetherVpnService extends VpnService {
         Process current = aetherProcess;
         if (current != null && current.isAlive()) return;
         int self = android.os.Process.myPid();
+        java.util.Set<String> expectedExecutables = new java.util.HashSet<>();
+        try {
+            for (String library : new String[]{"libaether.so", NativeIntegrity.PSIPHON, NativeIntegrity.LYREBIRD})
+                expectedExecutables.add(new File(getApplicationInfo().nativeLibraryDir, library).getCanonicalPath());
+        }
+        catch (IOException unavailable) { return; }
         File[] entries = new File("/proc").listFiles();
         if (entries == null) return;
         int killed = 0;
@@ -1442,13 +1519,14 @@ public final class AetherVpnService extends VpnService {
             try { pid = Integer.parseInt(entry.getName()); }
             catch (NumberFormatException notAProcess) { continue; }
             if (pid == self) continue;
-            String cmdline = readProcFile(new File(entry, "cmdline"));
-            if (!cmdline.contains("libaether.so")) continue;
             try {
+                String executable = new File(entry, "exe").getCanonicalPath();
+                if (!CoreProcessGuard.isOwnedExecutable(executable, expectedExecutables,
+                        readProcFile(new File(entry, "status")), android.os.Process.myUid())) continue;
                 android.os.Process.killProcess(pid);
                 killed++;
-                sendLog("Cleared a leftover Aether core process pid=" + pid);
-            } catch (RuntimeException error) {
+                sendLog("Cleared a leftover owned Core/helper process pid=" + pid);
+            } catch (IOException | RuntimeException error) {
                 sendLog("Could not clear leftover Aether core pid=" + pid + ": " + safeMessage(error));
             }
         }
@@ -1474,21 +1552,25 @@ public final class AetherVpnService extends VpnService {
      * @return true when the port is free
      */
     private boolean awaitSocksPortReleased(String socksAddress) {
+        return awaitListenerPortReleased("SOCKS5", socksAddress);
+    }
+
+    private boolean awaitListenerPortReleased(String listener, String address) {
         HostPort target;
-        try { target = HostPort.parse(socksAddress); }
+        try { target = HostPort.parse(address); }
         catch (IllegalArgumentException invalid) { return true; }
         long deadline = SystemClock.elapsedRealtime() + SOCKS_PORT_RELEASE_TIMEOUT_MS;
         boolean reported = false;
         while (SystemClock.elapsedRealtime() < deadline) {
             if (!portAccepts(target)) return true;
             if (!reported) {
-                sendLog("SOCKS port " + target.port + " is still held; waiting for it to be released");
+                sendLog(listener + " port " + target.port + " is still held; waiting for it to be released");
                 reported = true;
             }
             try { Thread.sleep(100L); }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return false; }
         }
-        sendLog("SOCKS port " + target.port + " did not free up within "
+        sendLog(listener + " port " + target.port + " did not free up within "
                 + SOCKS_PORT_RELEASE_TIMEOUT_MS + "ms; the new core may fail to bind");
         return false;
     }
@@ -1502,94 +1584,208 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
-    private void startAether(Intent request) throws Exception {
+    /**
+     * Starts the public 1818/1819 relays once the privacy listeners have proven live. Only the
+     * Chain topologies need them: they are the whole published proxy contract in those modes, so a
+     * session that could not start them is not allowed to publish Connected - a half-served
+     * contract (SOCKS answered by the relay, HTTP by nothing) is exactly the silent partial
+     * feature this build must not reintroduce.
+     */
+    private void startPublicRelays(Intent request) {
+        if (activeRequest != request) return;
+        Map<String, Object> settings = ProxyMode.settings(value(request, "connectionMode", "vpn"),
+                AndroidCoreSettings.fromIntent(request));
+        String upstreamSocks;
+        String upstreamHttp;
+        if (PsiphonChainRouting.chainActive(settings)) {
+            upstreamSocks = PrivacyRuntimeConfig.PSIPHON_SOCKS;
+            upstreamHttp = PrivacyRuntimeConfig.PSIPHON_HTTP;
+        } else if (TorChainRouting.chainActive(settings)) {
+            // dev.017 CHANGE 7: with Tor as the full-device exit, the public contract is served
+            // from the Tor SOCKS listener on 1819 and the Tor HTTP listener on 1818, both
+            // auto-provisioned exactly like the Psiphon chain provisions its listeners.
+            upstreamSocks = PrivacyRuntimeConfig.TOR_SOCKS;
+            upstreamHttp = PrivacyRuntimeConfig.TOR_HTTP;
+        } else return;
+        stopPublicRelays();
+        try {
+            publicRelays = PublicPortRelays.start(ProxyMode.SOCKS_ADDRESS, ProxyMode.HTTP_ADDRESS,
+                    upstreamSocks, upstreamHttp);
+            sendLog("Public proxy contract is served by the privacy chain: "
+                    + ProxyMode.SOCKS_ADDRESS + " -> " + upstreamSocks + ", "
+                    + ProxyMode.HTTP_ADDRESS + " -> " + upstreamHttp);
+        } catch (Exception unavailable) {
+            publicRelays = null;
+            throw new IllegalStateException("The public proxy ports could not be forwarded to the privacy chain", unavailable);
+        }
+    }
+
+    private void stopPublicRelays() {
+        PublicPortRelays relays = publicRelays;
+        publicRelays = null;
+        if (relays != null) relays.close();
+    }
+
+    private void startAether(Intent request, long startingSession) throws Exception {
+        if (stopping || generation.get() != startingSession) throw new InterruptedException("Core startup was cancelled");
         File executable = new File(getApplicationInfo().nativeLibraryDir, "libaether.so");
         if (!executable.isFile()) throw new IllegalStateException("Aether core is missing for this device architecture");
+
+        long integrityStarted = SystemClock.elapsedRealtime();
+        String verifiedAbi = CoreIntegrity.verify(executable);
+        sendLog("Performance core_integrity=" + (SystemClock.elapsedRealtime() - integrityStarted) + "ms");
+        String mode = value(request, "connectionMode", "vpn");
+        Map<String, Object> coreSettings = ProxyMode.settings(mode, AndroidCoreSettings.fromIntent(request));
+        // Full-device chaining (dev.016/dev.017): while a Psiphon or Tor Chain combination is
+        // active, the Core's base SOCKS listener moves to the internal port and becomes only the
+        // underlay that carries the privacy helper's upstream. The effective tunnel target - for
+        // HEV, readiness, the traffic gate, health checks and location lookups alike - is the
+        // privacy final proxy, and the public 1818/1819 contract is served by relays in front of
+        // the privacy listeners. With both chains off, both addresses are exactly what dev.015
+        // used.
+        boolean torChain = TorChainRouting.chainActive(coreSettings);
+        String coreBindSocks = torChain
+                ? TorChainRouting.coreSocksBind(coreSettings, mode, value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT))
+                : PsiphonChainRouting.coreSocksBind(coreSettings, mode, value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT));
+        String effectiveSocks = torChain
+                ? TorChainRouting.effectiveSocks(coreSettings, mode, value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT))
+                : PsiphonChainRouting.effectiveSocks(coreSettings, mode, value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT));
+        request.putExtra("socks", effectiveSocks);
+        if (!effectiveSocks.equals(coreBindSocks)) {
+            sendLog((torChain ? "Tor chain active: base SOCKS bound internally on "
+                    : "Psiphon chain active: base SOCKS bound internally on ") + coreBindSocks
+                    + "; device egress and public 1818/1819 are served through " + effectiveSocks);
+        }
+        // dev.017 CHANGE 5: Proxy mode never starts the internal full-device chains; the
+        // saved preferences are not rewritten, so returning to Device VPN reactivates them.
+        String modeInvalid = PrivacySettings.invalidForMode(coreSettings,
+                value(request, "protocol", ConnectionDefaults.PROTOCOL), mode);
+        if (modeInvalid != null)
+            throw new IllegalArgumentException("Invalid privacy setting: " + modeInvalid);
+        Map<String, String> coreEnvironment = CoreSettings.environment(coreSettings, value(request, "protocol", ConnectionDefaults.PROTOCOL), value(request, "transport", ConnectionDefaults.TRANSPORT));
+        PrivacyRuntimeConfig.validateListeners(coreSettings, effectiveSocks,
+                request.getBooleanExtra("lanEnabled", false) ? request.getIntExtra("lanPort", 18190) : null);
 
         // A previous core that outlived its session still owns the SOCKS port and its upstream
         // sockets. Clearing it here is what makes a repeated Connect deterministic.
         reapOrphanedCores();
-        awaitSocksPortReleased(coreSocksAddress(request));
+        for (Map.Entry<String, String> listener : PrivacyRuntimeConfig.listenerAddresses(coreSettings, effectiveSocks).entrySet()) {
+            if (!awaitListenerPortReleased(listener.getKey(), listener.getValue()))
+                throw new IllegalStateException("The previous " + listener.getKey() + " listener has not shut down");
+        }
+        // In Chain mode the app itself binds the public 1818/1819 relays only after the privacy
+        // listeners are ready, but the ports must be free now: a stale relay or an unrelated
+        // process would otherwise turn a connected session into one whose public contract is
+        // served by something else. This is the same preflight the manual mode has always run.
+        if (PsiphonChainRouting.chainActive(coreSettings) || TorChainRouting.chainActive(coreSettings)) {
+            try { ProxyMode.checkAvailable(ProxyMode.SOCKS_ADDRESS, ProxyMode.HTTP_ADDRESS); }
+            catch (ProxyMode.PortUnavailableException occupied) {
+                throw new ProxyPortException(getString(R.string.service_proxy_port_unavailable,
+                        occupied.listener, occupied.address), occupied);
+            }
+        }
+        if (ProxyMode.enabled(mode)) {
+            try { ProxyMode.checkAvailable(ProxyMode.SOCKS_ADDRESS, ProxyMode.HTTP_ADDRESS); }
+            catch (ProxyMode.PortUnavailableException occupied) {
+                throw new ProxyPortException(getString(R.string.service_proxy_port_unavailable,
+                        occupied.listener, occupied.address), occupied);
+            }
+        }
 
         ProcessBuilder builder = new ProcessBuilder(executable.getAbsolutePath());
         builder.directory(getFilesDir());
         builder.redirectErrorStream(true);
         Map<String, String> env = builder.environment();
-        // The core only knows masque, wireguard and gool — Protocol::parse
-        // sends anything else to masque, silently. So a chained session must
-        // name its INNER leg here: siphon is the outer layer and lives in this
-        // process, not in the core. Passing "siphon" through produced a MASQUE
-        // tunnel on 1820 that the outer half was never going to match.
-        env.put("AETHER_PROTOCOL", innerLegProtocol(value(request, "protocol", ConnectionDefaults.PROTOCOL)));
-        env.put("AETHER_SCAN", value(request, "scan", ConnectionDefaults.SCAN));
+        CoreSettings.clearInheritedEnvironment(env);
+        env.put("AETHER_PROTOCOL", value(request, "protocol", ConnectionDefaults.PROTOCOL));
+        env.put("AETHER_SCAN", ConnectionDefaults.normalizedScanMode(value(request, "scan", ConnectionDefaults.SCAN)));
         env.put("AETHER_IP", value(request, "ipMode", "v4"));
         env.put("AETHER_NOIZE", value(request, "obfuscation", ConnectionDefaults.OBFUSCATION));
         // Keep core diagnostics enabled internally; there is no user-facing log-level control.
         env.put("AETHER_LOG_LEVEL", "info");
-        String protocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
-        // The chain's inner leg listens on 1820, not the usual 1819: 1819 is
-        // Psiphon's own SOCKS listener on that path, and two things cannot share
-        // a port. The SOCKS extra the caller passed is ignored for siphon
-        // because the inner leg's port is not a user choice — Psiphon's
-        // UpstreamProxyURL is hard-coded to it, so a different number would
-        // break the chain rather than move it.
-        // Read from the intent, not from the protocol name. On a chained session
-        // the protocol here is the INNER leg — wireguard, masque or gool —
-        // because that is what the core is asked to run, so testing it against
-        // "siphon" was false and the core published on 1819, which is where
-        // Psiphon's own listener sits. The two collided and the probe of 1820
-        // timed out on a leg that was up and validated.
-        // The same call every probe and publish uses, so the port the core
-        // opens and the port the app waits on cannot drift apart.
-        env.put("AETHER_SOCKS", coreSocksAddress(request));
+        env.put("AETHER_SOCKS", coreBindSocks);
         env.put("AETHER_CONFIG", new File(getFilesDir(), "aether.toml").getAbsolutePath());
         env.put("AETHER_QUICK_RECONNECT", request.getBooleanExtra("quickReconnect", true) ? "1" : "0");
+        String protocol = value(request, "protocol", ConnectionDefaults.PROTOCOL);
         String transport = value(request, "transport", ConnectionDefaults.TRANSPORT);
-        // One WARP identity per transport, so switching modes does not move the
-        // identity underneath a live tunnel.
-        //
-        // AETHER_CONFIG is the base path, and without a per-protocol override
-        // every transport resolves to that same file. gool is the one that
-        // suffers: it stacks an outer and an inner WARP tunnel, so the core
-        // provisions a second device into a sibling file, and the outer one is
-        // then the same registered device plain WireGuard uses. Two tunnels on
-        // one identity, and the peer's cached endpoint written for one is read
-        // back for the other. AETHER_WG_CONFIG and AETHER_MASQUE_CONFIG are the
-        // documented overrides; the sibling name the core derives from them is
-        // what makes the second identity land in its own file too.
-        env.put("AETHER_WG_CONFIG", identityFile(protocol, "aether-wg.toml"));
-        env.put("AETHER_MASQUE_CONFIG", identityFile("masque", "aether-masque.toml"));
-        if ("masque".equals(protocol)) {
+        // dev.034: Gool over MASQUE rides a MASQUE outer tunnel, so the carrier selection
+        // (HTTP/3 vs HTTP/2) and the MASQUE MTU apply to it exactly as to masque/mim. On
+        // v2.3.0 leaving AETHER_MASQUE_HTTP2 unset would hit the Core's interactive carrier
+        // prompt with the service's closed stdin; setting it is also what makes the primary
+        // screen's MASQUE Connection Method control the real owner of the gool carrier.
+        if (CoreSettings.masque(protocol) || CoreSettings.goolOverMasque(protocol, coreSettings)) {
             env.put("AETHER_MASQUE_HTTP2", "h2".equals(transport) ? "1" : "0");
-            env.put("AETHER_MASQUE_MTU", Integer.toString(effectiveMtu(request)));
+            // v2.0.0 subtracts inner encapsulation from this OUTER budget. MIM's TUN is
+            // capped at 1280; a 1400-byte outer tunnel also carries an IPv6 QUIC inner hop.
+            env.put("AETHER_MASQUE_MTU", Integer.toString("mim".equals(protocol) ? 1400 : effectiveMtu(request)));
         }
         env.put("TMPDIR", getCacheDir().getAbsolutePath());
         String peer = request.getStringExtra("peer");
-        if (peer != null && !peer.trim().isEmpty()) env.put("AETHER_PEER", peer.trim());
+        if (peer != null && !peer.trim().isEmpty()) {
+            if (!CoreSettings.endpoint(peer.trim(), false)) throw new IllegalArgumentException("Invalid peer endpoint");
+            env.put("AETHER_PEER", peer.trim());
+        }
+
+        env.putAll(coreEnvironment);
+        // Organization identities must never reuse a personal or another team's identity.
+        String team = CoreSettings.string(coreSettings, "team").toLowerCase(Locale.ROOT);
+        if (!team.isEmpty()) env.put("AETHER_CONFIG", new File(getFilesDir(), "aether-team-" + team + ".toml").getAbsolutePath());
+        env.putAll(PrivacyRuntimeAssets.prepare(getContentResolver(), new File(getApplicationInfo().nativeLibraryDir),
+                getFilesDir(), verifiedAbi, coreSettings));
 
         masqueH3GatewayUnavailable = false;
+        runtimeGoolTopology = null;
+        runtimeGoolTopologyProof = null;
 
+        Process process;
+        ProxyMode.Listeners listeners = ProxyMode.enabled(mode)
+                ? new ProxyMode.Listeners(CoreSettings.string(coreSettings, "psiphonMode")) : null;
+        RuntimeTrafficPlan.Announcements announcements = new RuntimeTrafficPlan.Announcements(coreSettings, effectiveSocks);
         synchronized (runtimeLock) {
-            aetherProcess = builder.start();
+            if (stopping || generation.get() != startingSession) throw new InterruptedException("Core startup was cancelled");
+            if (aetherProcess != null && aetherProcess.isAlive()) {
+                throw new ProxyStartupException(getString(R.string.service_core_still_stopping));
+            }
+            process = builder.start();
+            aetherProcess = process;
+            proxyListeners = listeners;
+            privacyAnnouncements = announcements;
+            readinessTrace.clear();
         }
-        Process process = aetherProcess;
-        sendLog("Aether core started for " + Build.SUPPORTED_ABIS[0]);
-        Thread logs = new Thread(() -> readAetherLogs(process, protocol, transport), "aether-log-reader");
+        sendLog("Performance core_process_started=" + elapsedSinceRequest(request) + "ms");
+        sendLog("Verified Aether Core " + BuildConfig.AETHER_VERSION + " SHA-256 for " + verifiedAbi);
+        process.getOutputStream().close();
+        Thread logs = new Thread(() -> readAetherLogs(process, protocol, transport, listeners, announcements), "aether-log-reader");
         logs.setDaemon(true);
         logs.start();
     }
 
-    private void readAetherLogs(Process process, String protocol, String transport) {
+    private void readAetherLogs(Process process, String protocol, String transport, ProxyMode.Listeners listeners,
+                                RuntimeTrafficPlan.Announcements announcements) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 sendLog("[Aether] " + line);
                 String lower = line.toLowerCase(Locale.US);
-                if (process == aetherProcess && "masque".equals(protocol) && "h3".equals(transport)
+                if (process == aetherProcess && listeners != null) listeners.onCoreLog(lower);
+                if (process == aetherProcess) announcements.onCoreLog(lower);
+                if (process == aetherProcess && CoreSettings.masque(protocol) && "h3".equals(transport)
                         && lower.contains("no usable masque gateway found")) {
                     masqueH3GatewayUnavailable = true;
                 }
-                if (!smartBenchmarking) {
+                if (process == aetherProcess && "gool".equals(protocol)) {
+                    // The Core's own lines prove which of the two v2.3.0 Gool topologies is
+                    // actually running; the requested mode is only a request until one of
+                    // these arrives (PROMPT §4.5/§4.6).
+                    if (lower.contains("gool ready: masque ") && lower.contains(" carries wireguard ")) {
+                        runtimeGoolTopology = "masque";
+                        runtimeGoolTopologyProof = line.trim();
+                    } else if (lower.contains("establishing inner warp tunnel (warp-in-warp)")) {
+                        runtimeGoolTopology = "classic";
+                        runtimeGoolTopologyProof = line.trim();
+                    }
+                }
+                if (process == aetherProcess && !stopping && !smartBenchmarking && isConnectingState(currentState)) {
                     if (lower.contains("identity ready")) updateState("scanning", getString(R.string.service_identity_ready));
                     if (lower.contains("hunting for")) updateState("scanning", getString(R.string.service_testing_gateways));
                     if (lower.contains("validated") || lower.contains("passed handshake")) updateState("securing", getString(R.string.service_gateway_verified));
@@ -1602,7 +1798,6 @@ public final class AetherVpnService extends VpnService {
 
     private void monitorAether(Intent request, long session) throws Exception {
         int attempts = 0;
-
         while (!stopping && generation.get() == session) {
             Process process = aetherProcess;
             if (process == null) return;
@@ -1621,19 +1816,15 @@ public final class AetherVpnService extends VpnService {
                 throw new IllegalStateException(getString(R.string.service_reconnect_failed, MAX_RECONNECT_ATTEMPTS));
             }
             currentEndpoint = "";
+            long recoveryStarted = SystemClock.elapsedRealtime();
             updateState("reconnecting", getString(R.string.service_reconnecting));
             updateNotification(getString(R.string.service_reconnecting));
             Thread.sleep(Math.min(20_000L, 1_500L << (attempts - 1)));
-            if (!startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS)) {
+            if (!startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS, session)) {
                 sendLog(aetherExitMessage("Aether reconnect attempt did not become ready"));
                 Process retry = aetherProcess;
                 if (retry != null && retry.isAlive()) retry.destroy();
                 continue;
-            }
-            if ("gool".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL))) {
-                GoolExit exit = selectAcceptedGoolExit(request, session);
-                if (exit == null) return;
-                currentEndpoint = exit.location;
             }
             // A restarted core that opens its SOCKS listener has not proven it can carry traffic.
             // Publishing "connected" on the listener alone is exactly the false-Connected state
@@ -1648,11 +1839,16 @@ public final class AetherVpnService extends VpnService {
             }
             if (stopping || generation.get() != session) return;
             recoveryRestartPending.set(false);
+            // A recovered core rebuilt the Psiphon helper from scratch, so the public relays that
+            // were stopped with the dead core have to be re-bound in front of the new listeners
+            // before Connected is published again.
+            startPublicRelays(request);
             updateState("connected", getString(R.string.service_restored));
             updateNotification(getString(R.string.service_restored));
-            if (!"gool".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL))) {
-                scheduleLocationLookup(request, session);
-            }
+            sendLog("Performance reconnect_published=" + (SystemClock.elapsedRealtime() - recoveryStarted) + "ms attempt=" + attempts);
+            if (usesWarp(request) && "gool".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL))) {
+                scheduleGoolExitLookup(request, session, SystemClock.elapsedRealtime());
+            } else scheduleLocationLookup(request, session);
         }
     }
 
@@ -1696,17 +1892,69 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
-    private boolean startAetherWithMasqueFallback(Intent request, long timeoutMs) throws Exception {
+    private boolean waitForRequiredListeners(Intent request, long timeoutMs) throws ProxyStartupException {
+        // In Chain mode the published readiness line is the Psiphon final proxy itself: the base
+        // listener lives on the internal port and the public 1818/1819 ports are the app's
+        // relays, which start only after the whole data plane is proven. The full-tunnel
+        // announcement wait that follows in the traffic gate is what guarantees the Psiphon path
+        // actually carries traffic before Connected is published.
+        Map<String, Object> settings = ProxyMode.settings(value(request, "connectionMode", "vpn"),
+                AndroidCoreSettings.fromIntent(request));
+        if (PsiphonChainRouting.chainActive(settings) || TorChainRouting.chainActive(settings))
+            return waitForSocks(value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT), timeoutMs);
+        if (!ProxyMode.enabled(value(request, "connectionMode", "vpn"))) {
+            return waitForSocks(value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT), timeoutMs);
+        }
+        long deadline = SystemClock.elapsedRealtime() + timeoutMs;
+        while (!stopping && SystemClock.elapsedRealtime() < deadline) {
+            ProxyMode.Listeners listeners = proxyListeners;
+            if (listeners != null && listeners.failedListener() != null) {
+                String listener = listeners.failedListener();
+                throw new ProxyPortException(getString(R.string.service_proxy_port_unavailable, listener,
+                        "HTTP".equals(listener) ? ProxyMode.HTTP_ADDRESS : ProxyMode.SOCKS_ADDRESS));
+            }
+            Process process = aetherProcess;
+            if (process == null || !process.isAlive() || masqueH3GatewayUnavailable) return false;
+            if (proxyListenersRespond(process)) return true;
+            try { Thread.sleep(100); }
+            catch (InterruptedException cancelled) { Thread.currentThread().interrupt(); return false; }
+        }
+        return false;
+    }
+
+    private boolean proxyListenersRespond(Process process) {
+        ProxyMode.Listeners listeners = proxyListeners;
+        return process != null && process == aetherProcess && process.isAlive()
+                && listeners != null && listeners.announced()
+                && socksHandshakeSucceeds(HostPort.parse(ProxyMode.SOCKS_ADDRESS))
+                && ProxyMode.httpResponds(ProxyMode.HTTP_ADDRESS)
+                && process == aetherProcess && process.isAlive() && !stopping;
+    }
+
+    private boolean listenerStartupFailed(Intent request) throws ProxyStartupException {
+        if (!stopping && ProxyMode.enabled(value(request, "connectionMode", "vpn"))) {
+            throw new ProxyStartupException(getString(R.string.service_proxy_not_ready,
+                    ProxyMode.SOCKS_ADDRESS, ProxyMode.HTTP_ADDRESS));
+        }
+        return false;
+    }
+
+    private boolean startAetherWithMasqueFallback(Intent request, long timeoutMs, long session) throws Exception {
         long started = SystemClock.elapsedRealtime();
-        startAether(request);
-        String socks = coreSocksAddress(request);
-        boolean masqueH3 = "masque".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL))
-                && "h3".equals(value(request, "transport", ConnectionDefaults.TRANSPORT));
+        startAether(request, session);
+        boolean masque = usesWarp(request) && CoreSettings.masque(value(request, "protocol", ConnectionDefaults.PROTOCOL));
+        if (masque)
+            timeoutMs = Math.max(timeoutMs, request.getIntExtra("startupSecs", 30) * 1000L * ("mim".equals(value(request, "protocol", "")) ? 2 : 1));
+        // A full-device Tor chain's SOCKS listener only opens after Tor bootstraps its consensus
+        // through the WARP underlay, which can take over a minute on first run.
+        if (TorChainRouting.chainActive(ProxyMode.settings(value(request, "connectionMode", "vpn"),
+                AndroidCoreSettings.fromIntent(request))))
+            timeoutMs = Math.max(timeoutMs, SOCKS_TIMEOUT_MS + TOR_CHAIN_STARTUP_ALLOWANCE_MS);
+        boolean masqueH3 = masque && "h3".equals(value(request, "transport", ConnectionDefaults.TRANSPORT));
         long primaryTimeout = masqueH3 ? Math.min(timeoutMs, MASQUE_H3_PRIMARY_TIMEOUT_MS) : timeoutMs;
-        if (waitForSocks(socks, primaryTimeout)) return true;
-        if (stopping || !"masque".equals(value(request, "protocol", ConnectionDefaults.PROTOCOL))
-                || !"h3".equals(value(request, "transport", ConnectionDefaults.TRANSPORT))) {
-            return false;
+        if (waitForRequiredListeners(request, primaryTimeout)) return true;
+        if (stopping || !masqueH3) {
+            return listenerStartupFailed(request);
         }
         sendLog(masqueH3GatewayUnavailable
                 ? "MASQUE HTTP/3 gateway scan failed; retrying with HTTP/2 transport"
@@ -1714,9 +1962,9 @@ public final class AetherVpnService extends VpnService {
         stopAetherOnly();
         request.putExtra("transport", "h2");
         updateState("scanning", getString(R.string.service_scanning));
-        startAether(request);
+        startAether(request, session);
         long remaining = Math.max(5_000L, timeoutMs - (SystemClock.elapsedRealtime() - started));
-        return waitForSocks(socks, remaining);
+        return waitForRequiredListeners(request, remaining) || listenerStartupFailed(request);
     }
 
     private String chooseSmartProtocol(Intent request, long session) throws Exception {
@@ -1755,17 +2003,13 @@ public final class AetherVpnService extends VpnService {
         return best.protocol;
     }
 
-    private SmartResult benchmarkProtocol(Intent request, String protocol, long session) {
+    private SmartResult benchmarkProtocol(Intent request, String protocol, long session) throws ProxyPortException {
         long started = System.nanoTime();
         try {
-            String socks = coreSocksAddress(request);
-            boolean connected = startAetherWithMasqueFallback(request, SMART_PROTOCOL_TIMEOUT_MS);
+            String socks = value(request, "socks", "127.0.0.1:1819");
+            boolean connected = startAetherWithMasqueFallback(request, SMART_PROTOCOL_TIMEOUT_MS, session);
             long handshakeMs = elapsedMillis(started);
             if (!connected) return SmartResult.failed(protocol, handshakeMs);
-            if ("gool".equals(protocol)) {
-                GoolExit exit = selectAcceptedSmartGoolExit(request, session);
-                if (exit == null) return SmartResult.failed(protocol, handshakeMs);
-            }
             long latencyMs = socksConnectMillis(socks, "1.1.1.1", 443, 4_000);
             long dnsMs = socksConnectMillis(socks, "cloudflare.com", 443, 5_000);
             int attempts = 2;
@@ -1781,34 +2025,22 @@ public final class AetherVpnService extends VpnService {
             }
             if (stable > 0) latencyMs = Math.min(latencyMs, latencyTotal / stable);
             return SmartResult.success(protocol, handshakeMs, latencyMs, dnsMs, stable, attempts);
+        } catch (ProxyPortException occupied) {
+            throw occupied;
         } catch (Throwable error) {
             return SmartResult.failed(protocol, elapsedMillis(started));
         }
     }
 
-    private GoolExit selectAcceptedSmartGoolExit(Intent request, long session) throws Exception {
-        String protocol = "gool";
-        for (int retry = 0; retry <= MAX_GOOL_IRAN_RETRIES; retry++) {
-            if (stopping || generation.get() != session) return null;
-            GoolExit exit = lookupGoolExit(request);
-            // Same rule as selectAcceptedGoolExit: a validated tunnel with an
-            // Iranian exit is a working tunnel, and the user chooses whether
-            // that is acceptable here.
-            if (!isIranCountry(exit.countryCode) || acceptsIranExit()) return exit;
-            if (retry == MAX_GOOL_IRAN_RETRIES) return null;
-            rejectIranExit(retry);
-            clearGoolGatewayCache(protocol);
-            stopAetherOnly();
-            Thread.sleep(GOOL_IRAN_RETRY_DELAY_MS);
-            if (!startAetherWithMasqueFallback(request, SMART_PROTOCOL_TIMEOUT_MS)) return null;
-        }
-        return null;
+    private Socket openSocksTunnel(String socksAddress, String host, int port, int timeoutMs) throws Exception {
+        return openSocksTunnel(socksAddress, host, port, timeoutMs, null);
     }
 
-    private Socket openSocksTunnel(String socksAddress, String host, int port, int timeoutMs) throws Exception {
+    private Socket openSocksTunnel(String socksAddress, String host, int port, int timeoutMs, ProbeCancellation cancellation) throws Exception {
         HostPort proxy = HostPort.parse(socksAddress);
         Socket socket = new Socket();
         try {
+            if (cancellation != null) cancellation.track(socket);
             socket.connect(new InetSocketAddress(proxy.host, proxy.port), timeoutMs);
             socket.setSoTimeout(timeoutMs);
             InputStream input = socket.getInputStream();
@@ -1856,19 +2088,29 @@ public final class AetherVpnService extends VpnService {
         currentEndpoint = getString(R.string.location_detecting);
         sendStatus(currentState, currentMessage);
         worker.execute(() -> {
+            long started = SystemClock.elapsedRealtime();
             String location = "";
             try {
                 if (!isLocationLookupCurrent(lookup, session)) return;
-                String socksAddress = deviceSocksAddress(request);
+                String socksAddress = value(request, "socks", "127.0.0.1:1819");
                 String address = "";
                 String traceCountry = "";
                 try {
-                    String trace = socksHttpGet(socksAddress, "www.cloudflare.com", "/cdn-cgi/trace");
+                    String trace = locationTrace(socksAddress, session);
                     address = traceValue(trace, "ip");
-                    traceCountry = normalizedCountryCode(traceValue(trace, "loc"), "");
+                    String rawTraceCountry = traceValue(trace, "loc");
+                    traceCountry = normalizedCountryCode(rawTraceCountry, "");
                     if (!address.isEmpty() && !traceCountry.isEmpty()) {
                         location = countryFlag(traceCountry) + " " + traceCountry;
                         sendLog("VPN location detected from Cloudflare trace: " + location);
+                    } else if (!address.isEmpty() && isNonCountryMarker(rawTraceCountry)) {
+                        // dev.020 CHANGE 6: the trace answered with Cloudflare's Tor marker
+                        // (T1/T2/XX) instead of a country. T1 is NOT an ISO country code and
+                        // must never be rendered as a flag; the real final Tor exit country is
+                        // resolved below through the same trustworthy geo-IP providers the
+                        // lookup already uses for this exit IP (no new dependency).
+                        sendLog("Trace reported the Tor marker " + rawTraceCountry
+                                + " instead of a country; resolving the real Tor exit country");
                     }
                 } catch (Throwable traceError) {
                     sendLog("Cloudflare VPN location trace failed; trying geo providers: " + safeMessage(traceError));
@@ -1910,6 +2152,13 @@ public final class AetherVpnService extends VpnService {
                         sendLog("Fallback VPN location provider failed: " + safeMessage(fallbackError));
                     }
                 }
+                // dev.020 CHANGE 6: even a cached location is only trusted when its stored
+                // country is a real ISO country — a stale T1-style value can never re-enter
+                // the display path.
+                if (!location.isEmpty() && !countryCodesValid(location)) {
+                    sendLog("Discarding non-country cached location value");
+                    location = "";
+                }
                 if (!location.isEmpty() && isLocationLookupCurrent(lookup, session)) {
                     stateStore.edit()
                             .putInt(LOCATION_CACHE_VERSION_KEY, LOCATION_CACHE_VERSION)
@@ -1929,9 +2178,37 @@ public final class AetherVpnService extends VpnService {
                         ? getString(R.string.connection_location_unavailable)
                         : location;
                 sendLog(location.isEmpty() ? "VPN location state=unavailable" : "VPN location detected: " + location);
+                sendLog("Performance location_lookup=" + (SystemClock.elapsedRealtime() - started) + "ms");
                 sendStatus(currentState, currentMessage);
             }
         });
+    }
+
+    /**
+     * dev.020 CHANGE 6: whether a rendered location line (e.g. "🇩🇪 DE" or "🇩🇪 Berlin") is built
+     * from a real ISO country. The renderer always prefixes a two-regional-indicator flag when
+     * the code was valid, so the line must start with exactly two flag characters; the remainder
+     * (an ISO code, or a city name followed by an optional code) must consist of Unicode
+     * letters only — the Tor marker "T1" and any digit-bearing fragment fail, so such a value
+     * degrades to the truthful "Location unavailable" state instead of a fabricated country.
+     */
+    static boolean countryCodesValid(String renderedLocation) {
+        if (renderedLocation == null) return false;
+        String line = renderedLocation.trim();
+        if (line.isEmpty()) return false;
+        int[] codePoints = line.codePoints().toArray();
+        if (codePoints.length < 3) return false;
+        for (int i = 0; i < 2; i++) {
+            if (codePoints[i] < 0x1F1E6 || codePoints[i] > 0x1F1FF) return false;
+        }
+        String remainder = new String(codePoints, 2, codePoints.length - 2).trim();
+        if (remainder.isEmpty()) return false;
+        for (int codePoint : remainder.codePoints().toArray()) {
+            // Letters and word-joining spaces only: the Tor marker "T1" (and any digit-bearing
+            // or punctuation fragment) fails here.
+            if (!Character.isLetter(codePoint) && codePoint != ' ') return false;
+        }
+        return true;
     }
 
     private boolean isLocationLookupCurrent(long lookup, long session) {
@@ -1947,101 +2224,24 @@ public final class AetherVpnService extends VpnService {
         return cached == null ? "" : cached;
     }
 
-    private GoolExit selectAcceptedGoolExit(Intent request, long session) throws Exception {
-        String protocol = "gool";
-        for (int retry = 0; retry <= MAX_GOOL_IRAN_RETRIES; retry++) {
-            if (!isCurrentSession(request, session)) return null;
-            GoolExit exit;
-            try {
-                exit = lookupGoolExit(request);
-            } catch (GoolExitException error) {
-                throw error;
-            } catch (Exception error) {
-                throw new GoolExitException(getString(R.string.service_gool_country_unavailable), error);
-            }
-            if (!isCurrentSession(request, session)) return null;
-            if (!isIranCountry(exit.countryCode)) return exit;
-            // A tunnel that validated end to end, carries traffic, and answers
-            // a ping is a working connection. An Iranian exit makes it a poor
-            // one from inside Iran, which is a preference rather than a
-            // failure — so the user decides, and the default is to keep what
-            // works instead of discarding it three times and ending with no
-            // tunnel at all.
-            if (acceptsIranExit()) return exit;
-            if (retry == MAX_GOOL_IRAN_RETRIES) {
-                throw new GoolExitException(getString(R.string.service_gool_iran_failed, MAX_GOOL_IRAN_RETRIES));
-            }
-            rejectIranExit(retry);
-            // The exit country follows the gateway, not the registered device.
-            // Restarting the core alone re-runs the scan and can hand back the
-            // same region, which is what the field log showed: the same gateway
-            // twice, an Iran exit twice, and three full restarts for nothing.
-            // Clearing the cached peer forces the scan to reach for another one.
-            clearGoolGatewayCache(protocol);
-            stopAetherOnly();
-            Thread.sleep(GOOL_IRAN_RETRY_DELAY_MS);
-            if (!isCurrentSession(request, session)) return null;
-            if (!startAetherWithMasqueFallback(request, SOCKS_TIMEOUT_MS)) {
-                throw new IllegalStateException(aetherExitMessage("Aether could not restart after an Iran exit"));
-            }
+    private String locationTrace(String socksAddress, long session) throws Exception {
+        Process process = aetherProcess;
+        String trace = readinessTrace.take(process, session, SystemClock.elapsedRealtime());
+        if (trace != null && process != null && process.isAlive()) {
+            sendLog("Performance location_trace_reused_from_readiness=1");
+            return trace;
         }
-        return null;
+        return socksHttpGet(socksAddress, "www.cloudflare.com", "/cdn-cgi/trace");
     }
 
-    /** Whether an Iranian exit is acceptable, per the user's setting. */
-    private boolean acceptsIranExit() {
-        return getSharedPreferences("aether", MODE_PRIVATE)
-                .getBoolean("acceptIranExit", true);
-    }
-
-    /**
-     * Drop the gateway the core would otherwise reuse.
-     *
-     * The core caches the endpoint that worked last time so Android, which
-     * starts a fresh process on every connect, does not pay for a full scan
-     * each time. That cache is exactly what pins the exit country, so a retry
-     * that means "get me a different country" has to remove it.
-     *
-     * The names are derived, not guessed: the core builds them with
-     * derive_sibling_path, which inserts the suffix before the extension, so
-     * aether-gool.toml + "gool-lastconn" is aether-gool-gool-lastconn.toml.
-     * Hand-writing those names is how a cache that is never cleared looks like
-     * a cache that is cleared and does not help.
-     */
-    private void clearGoolGatewayCache(String protocol) {
-        String base = new File(getFilesDir(), identityFile(protocol, "aether-wg.toml")).getName();
-        for (String suffix : new String[] { "gool-lastconn", "lastconn" }) {
-            File cached = new File(getFilesDir(), siblingName(base, suffix));
-            if (cached.isFile() && !cached.delete()) {
-                sendLog("Could not clear " + cached.getName());
-            }
-        }
-    }
-
-    /**
-     * The core's derive_sibling_path, in Java: insert the suffix before the
-     * extension of the file name, leaving the directory alone.
-     */
-    private static String siblingName(String fileName, String suffix) {
-        int dot = fileName.lastIndexOf('.');
-        if (dot <= 0) return fileName + "-" + suffix;
-        return fileName.substring(0, dot) + "-" + suffix + fileName.substring(dot);
-    }
-
-    private void rejectIranExit(int retry) {
-        sendLog("Rejected gool exit country IR; restarting route");
-        updateState("reconnecting", getString(R.string.service_gool_rejecting_iran, retry + 1, MAX_GOOL_IRAN_RETRIES));
-        updateNotification(getString(R.string.service_gool_rejecting_iran, retry + 1, MAX_GOOL_IRAN_RETRIES));
-    }
-
-    private GoolExit lookupGoolExit(Intent request) throws Exception {
-        String socksAddress = coreSocksAddress(request);
+    private GoolExit lookupGoolExit(Intent request, long session) throws Exception {
+        String socksAddress = value(request, "socks", "127.0.0.1:1819");
         JSONObject geo = null;
         String address = "";
         try {
             // Cloudflare's trace endpoint returns the exit IP and ISO country in one small
             // response and is substantially less prone to rate limiting than public geo APIs.
-            String trace = socksHttpGet(socksAddress, "www.cloudflare.com", "/cdn-cgi/trace");
+            String trace = locationTrace(socksAddress, session);
             address = traceValue(trace, "ip");
             String country = normalizedCountryCode(traceValue(trace, "loc"), "");
             if (!address.isEmpty() && !country.isEmpty()) {
@@ -2126,22 +2326,44 @@ public final class AetherVpnService extends VpnService {
                 geo.optString("country", geo.optString("countryCode", "")));
     }
 
+    /**
+     * dev.020 CHANGE 6: strictly valid ISO 3166-1 alpha-2 or empty. Cloudflare's trace returns
+     * {@code loc=T1} for Tor exits: "T1" is NOT a country code, yet the old length-2 check
+     * accepted it and {@code countryFlag("T1")} rendered a broken flag + "T1" on Home LOCATION.
+     * Every code that is not exactly two ASCII letters is rejected (T1, XX digits, junk); the
+     * A-Z-only test matches the flag renderer's own requirement, so a returned code can always
+     * be rendered as a flag. A country name fallback remains for providers that answer with
+     * "Iran" (uppercase name equality), but a name of length 2 that is not two letters is never
+     * accepted.
+     */
     static String normalizedCountryCode(String countryCode, String countryName) {
         String code = countryCode == null ? "" : countryCode.trim().toUpperCase(Locale.US);
-        if (code.length() == 2) return code;
+        if (isIsoAlpha2(code)) return code;
         String name = countryName == null ? "" : countryName.trim().toUpperCase(Locale.US);
-        return "IRAN".equals(name) ? "IR" : name.length() == 2 ? name : "";
+        if ("IRAN".equals(name)) return "IR";
+        return isIsoAlpha2(name) ? name : "";
     }
 
-    static boolean isIranCountry(String countryCode) {
-        return "IR".equalsIgnoreCase(countryCode == null ? "" : countryCode.trim());
+    /** Exact ISO 3166-1 alpha-2 shape: two ASCII letters and nothing else (rejects T1). */
+    static boolean isIsoAlpha2(String code) {
+        return code != null && code.length() == 2
+                && code.charAt(0) >= 'A' && code.charAt(0) <= 'Z'
+                && code.charAt(1) >= 'A' && code.charAt(1) <= 'Z';
+    }
+
+    /**
+     * dev.020 CHANGE 6: a Cloudflare trace value that describes the Tor network rather than a
+     * country ("T1", and defensively "T2"/"XX" if Cloudflare ever reports another special-use
+     * marker). Such a value must never become a flag; the real Tor exit country has to be
+     * resolved separately from the trace.
+     */
+    static boolean isNonCountryMarker(String code) {
+        return code != null && (code.equals("T1") || code.equals("T2") || code.equals("XX"));
     }
 
     static boolean providerShouldBackOff(String message) {
         return message != null && (message.contains("HTTP 403") || message.contains("HTTP 429"));
     }
-
-    static int maxGoolIranRetries() { return MAX_GOOL_IRAN_RETRIES; }
 
     private static final class GoolExit {
         final String address;
@@ -2158,6 +2380,16 @@ public final class AetherVpnService extends VpnService {
     private static final class GoolExitException extends Exception {
         GoolExitException(String message) { super(message); }
         GoolExitException(String message, Throwable cause) { super(message, cause); }
+    }
+
+    private static class ProxyStartupException extends Exception {
+        ProxyStartupException(String message) { super(message); }
+        ProxyStartupException(String message, Throwable cause) { super(message, cause); }
+    }
+
+    private static final class ProxyPortException extends ProxyStartupException {
+        ProxyPortException(String message) { super(message); }
+        ProxyPortException(String message, Throwable cause) { super(message, cause); }
     }
 
     /**
@@ -2189,8 +2421,13 @@ public final class AetherVpnService extends VpnService {
 
     /** Layer verified TLS for {@code host} over an already-connected {@code tunnel}. */
     static SSLSocket verifiedTlsSocket(SSLSocketFactory factory, Socket tunnel, String host, int port, int timeoutMs) throws IOException {
+        return verifiedTlsSocket(factory, tunnel, host, port, timeoutMs, null);
+    }
+
+    private static SSLSocket verifiedTlsSocket(SSLSocketFactory factory, Socket tunnel, String host, int port, int timeoutMs, ProbeCancellation cancellation) throws IOException {
         SSLSocket ssl = (SSLSocket) factory.createSocket(tunnel, host, port, true);
         try {
+            if (cancellation != null) cancellation.track(ssl);
             ssl.setSSLParameters(httpsIdentityParameters(ssl.getSSLParameters(), host));
             ssl.setSoTimeout(timeoutMs);
             ssl.startHandshake();
@@ -2206,9 +2443,18 @@ public final class AetherVpnService extends VpnService {
     }
 
     private String socksHttpGet(String socksAddress, String host, String path, int timeoutMs) throws Exception {
-        try (Socket tunnel = openSocksTunnel(socksAddress, host, 443, timeoutMs)) {
+        return proxyHttpGet(socksAddress, host, path, timeoutMs, false);
+    }
+
+    private String proxyHttpGet(String proxyAddress, String host, String path, int timeoutMs, boolean viaHttp) throws Exception {
+        return proxyHttpGet(proxyAddress, host, path, timeoutMs, viaHttp, null);
+    }
+
+    private String proxyHttpGet(String proxyAddress, String host, String path, int timeoutMs, boolean viaHttp, ProbeCancellation cancellation) throws Exception {
+        try (Socket tunnel = viaHttp ? ProxyMode.openHttpTunnel(proxyAddress, host, 443, timeoutMs, cancellation)
+                : openSocksTunnel(proxyAddress, host, 443, timeoutMs, cancellation)) {
             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-            try (SSLSocket ssl = verifiedTlsSocket(factory, tunnel, host, 443, timeoutMs)) {
+            try (SSLSocket ssl = verifiedTlsSocket(factory, tunnel, host, 443, timeoutMs, cancellation)) {
                 OutputStream output = ssl.getOutputStream();
                 output.write(("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\nAccept: application/json\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
                 output.flush();
@@ -2251,7 +2497,10 @@ public final class AetherVpnService extends VpnService {
     }
 
     private static String countryFlag(String country) {
-        if (country.length() != 2) return "";
+        // dev.020 CHANGE 6: only a strict ISO alpha-2 code becomes a flag. "T1" and any
+        // non-two-letter marker return an empty flag so the value degrades to "unavailable"
+        // rather than rendering a broken flag.
+        if (!isIsoAlpha2(country)) return "";
         return new String(Character.toChars(0x1F1E6 + country.charAt(0) - 'A')) + new String(Character.toChars(0x1F1E6 + country.charAt(1) - 'A'));
     }
 
@@ -2288,25 +2537,13 @@ public final class AetherVpnService extends VpnService {
 
     private static String protocolLabel(String protocol) {
         if ("wg".equals(protocol)) return "WireGuard";
-        if ("gool".equals(protocol)) return "gool / WARP-in-WARP";
+        if ("gool".equals(protocol)) return "Gool";
+        if ("mim".equals(protocol)) return "MASQUE-in-MASQUE";
         return "MASQUE";
     }
 
     private File writeTunConfig(Intent request) throws Exception {
-        return writeTunConfig(request, coreSocksAddress(request));
-    }
-
-    /**
-     * Write the HEV config against an explicit upstream.
-     *
-     * The chain needs this: the bridge is configured once, when the TUN is
-     * established, and at that moment the only port that exists is the core's.
-     * By the time Psiphon is up the bridge has to be pointed at a different one,
-     * which means rewriting the same file and restarting the bridge on the same
-     * descriptor.
-     */
-    private File writeTunConfig(Intent request, String socksAddress) throws Exception {
-        HostPort socks = HostPort.parse(socksAddress);
+        HostPort socks = HostPort.parse(value(request, "socks", "127.0.0.1:1819"));
         File config = new File(getCacheDir(), "hev.yml");
         try (FileWriter writer = new FileWriter(config, false)) {
             writer.write("misc:\n");
@@ -2315,79 +2552,24 @@ public final class AetherVpnService extends VpnService {
             writer.write("  log-level: warn\n");
             writer.write("tunnel:\n");
             writer.write("  mtu: " + effectiveMtu(request) + "\n");
-            writer.write("  ipv4: " + HEV_TUN_ADDRESS + "\n");
+            writer.write("  ipv4: 198.18.0.1\n");
             // Always give HEV the IPv6 tunnel address. The TUN always carries IPv6 routes now, so
             // without this HEV cannot process those packets and they are silently dropped; with it
             // every IPv6 flow becomes a SOCKS5 CONNECT that either reaches the core's IPv6 exit or
             // fails fast enough for the client to fall back to IPv4.
-            writer.write("  ipv6: '" + HEV_TUN_ADDRESS_V6 + "'\n");
+            writer.write("  ipv6: 'fc00::1'\n");
             writer.write("  icmp: 'reply'\n");
             writer.write("socks5:\n");
             writer.write("  address: '" + yamlEscape(socks.host) + "'\n");
             writer.write("  port: " + socks.port + "\n");
-            writer.write("  udp: '" + socksUdpMode(request) + "'\n");
-            if (request.getBooleanExtra(EXTRA_CHAIN_LEG, false)) {
-                // HEV cannot be told to carry CONNECT only. UDP is switched on
-                // unconditionally in lwIP, and the one config key that decides the
-                // SOCKS5 command it uses for UDP has no third value:
-                //
-                //   udp: 'udp' -> 0x03 UDP ASSOCIATE   (Psiphon refuses)
-                //   udp: 'tcp' -> 0x05 BIND            (Psiphon refuses)
-                //   omitted    -> 0x05, the C default, not the README's "udp"
-                //
-                // So the flood cannot be configured away; it has to be taken off the
-                // wire. mapdns does that: HEV answers DNS itself from a local cache
-                // and only resolves through the tunnel when the cache misses. DNS is
-                // effectively all the UDP a phone generates, and it was the source of
-                // hundreds of these per minute.
-                //
-                // The addresses are HEV's own CGNAT defaults (hev-config.c
-                // hev_config_reset). 198.18.0.2 is the resolver the client is told to
-                // use and 100.64.0.0/10 is the synthetic network it hands back, so
-                // nothing here can collide with a real route.
-                writer.write("mapdns:\n");
-                writer.write("  address: " + HEV_ROUTER_DNS + "\n");
-                writer.write("  port: 53\n");
-                writer.write("  network: 100.64.0.0\n");
-                writer.write("  netmask: 255.192.0.0\n");
-                writer.write("  cache-size: 4096\n");
-            }
+            // The Psiphon helper's local SOCKS serves CONNECT and standard UDP ASSOCIATE; the
+            // device's DNS and other UDP flows ride the same UDP relay in Chain mode as they do
+            // through the base listener, so both topologies keep the native 'udp' mode. (HEV's
+            // 'tcp' mode is not an option here: it issues a private forward-UDP command the
+            // Psiphon server rejects, which the dev.016 device validation demonstrated.)
+            writer.write("  udp: 'udp'\n");
         }
         return config;
-    }
-
-    /**
-     * An HTTPS GET whose only route to the internet is the TUN itself.
-     *
-     * The socket is deliberately NOT protected. protect() exempts a socket from
-     * the VPN, which is what every other probe in this service does, and here it
-     * is the opposite of what is wanted: the packet has to land on 10.0.0.2, be
-     * read by the bridge, and come back out of Psiphon. If the TUN, the subnet or
-     * the bridge is wrong, this times out and the session does not publish.
-     *
-     * It is also the only check that can catch a bridge which accepts a
-     * connection and carries nothing — which is precisely how a too-small subnet
-     * looks from every other angle in this file.
-     */
-    private String tunTrafficProof(Intent request, String host, String path, int timeoutMs)
-            throws Exception {
-        URL url = new URL("https://" + host + path);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setConnectTimeout(timeoutMs);
-        connection.setReadTimeout(timeoutMs);
-        connection.setInstanceFollowRedirects(false);
-        try {
-            int status = connection.getResponseCode();
-            InputStream body = status >= 400 ? connection.getErrorStream()
-                    : connection.getInputStream();
-            if (body == null) return String.valueOf(status);
-            byte[] buffer = new byte[256];
-            int read = body.read(buffer);
-            return read <= 0 ? String.valueOf(status) : new String(buffer, 0, read,
-                    java.nio.charset.StandardCharsets.UTF_8);
-        } finally {
-            connection.disconnect();
-        }
     }
 
     private void applySplitApps(Builder builder, Intent request) {
@@ -2416,23 +2598,7 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
-    private void addPublicRoutes(Builder builder, boolean chain) {
-        // HEV's own subnet has to come back, whatever the exclusions below say.
-        // bypass-local drops 10.0.0.0/8 as private space, and for a chain that
-        // space is the tunnel: 10.0.0.0/8 is the TUN itself, 10.0.0.2 is the
-        // resolver, and 100.64.0.0/10 is the range mapdns hands out as its fake
-        // answers. Lose the route and the resolver becomes unreachable, so a
-        // device that can reach the internet has no way to find an address worth
-        // reaching. MSN-GUARD says it as addRoute(subnet, prefixLength) next to
-        // addAddress — the subnet is not implied by the interface address.
-        builder.addRoute(HEV_TUN_SUBNET, HEV_TUN_PREFIX);
-        // mapdns answers with addresses in 100.64.0.0/10, and bypass-local treats
-        // that as CGNAT space and keeps it off the tunnel. On a chain that is the
-        // opposite of what is wanted: a lookup returns 100.64.0.x, the device
-        // sends to it, and with the range excluded the packet leaves the TUN and
-        // the answer is a timeout. The route is scoped to the chain because a
-        // direct session has no mapdns and some carriers genuinely use that range.
-        if (chain) builder.addRoute(HEV_MAPDNS_NETWORK, HEV_MAPDNS_PREFIX);
+    private void addPublicRoutes(Builder builder) {
         List<Ipv4Range> excluded = new ArrayList<>();
         excluded.add(Ipv4Range.cidr("0.0.0.0", 8));
         excluded.add(Ipv4Range.cidr("10.0.0.0", 8));
@@ -2546,12 +2712,19 @@ public final class AetherVpnService extends VpnService {
             long now = System.currentTimeMillis();
             if (previousWidgetPing != lastPing || now - lastWidgetUpdateAt >= 6_000L) {
                 lastWidgetUpdateAt = now;
-                MehmanshahrWidgetProvider.update(this);
+                AethonWidgetProvider.update(this);
             }
         }
         maybeCheckTunnelHealth();
+        // dev.020 CHANGE 9: a connected telemetry tick is also the accounting checkpoint (the
+        // tick already runs every 2s; the tracker persists only whole accumulated seconds, so
+        // this is one small write per tick while connected and none while disconnected - no
+        // wasteful per-second disk writes; the Home display itself updates once per second
+        // from the broadcast without any disk access).
+        if (connectedTime != null && "connected".equals(currentState)) connectedTime.checkpoint();
         Intent intent = new Intent(ACTION_STATS).setPackage(getPackageName());
-        intent.putExtra("tx", tx).putExtra("rx", rx).putExtra("ping", lastPing).putExtra("connectedAt", connectedAt);
+        intent.putExtra("tx", tx).putExtra("rx", rx).putExtra("ping", lastPing).putExtra("connectedAt", connectedAt)
+                .putExtra("dailySeconds", connectedTime == null ? 0L : connectedTime.todaySeconds());
         if (changed || System.currentTimeMillis() - lastStatsBroadcastAt >= 5_000L) {
             lastStatsBroadcastAt = System.currentTimeMillis();
             sendBroadcast(intent, INTERNAL_PERMISSION);
@@ -2574,9 +2747,13 @@ public final class AetherVpnService extends VpnService {
         boolean connected = "connected".equals(currentState);
         boolean recovering = !connected && healthProbeApplies(currentState) && connectionEstablished;
         if ((!connected && !recovering) || networkUnavailable || now - lastHealthCheckAt < HEALTH_CHECK_INTERVAL_MS) return;
+        Intent request = activeRequest;
+        boolean privacy = request != null && RuntimeTrafficPlan.privacyEnabled(AndroidCoreSettings.fromIntent(request));
+        if (recovering && privacy) return;
         // Observed traffic only stands in for a probe once the state is settled; while recovering the
         // probe is the evidence that decides whether the tunnel is serving again.
-        if (connected && lastTrafficSampleAt > 0 && (lastTrafficTx != lastHealthTx || lastTrafficRx != lastHealthRx)
+        if (connected && !privacy && !ProxyMode.enabled(request == null ? "" : value(request, "connectionMode", "vpn"))
+                && lastTrafficSampleAt > 0 && (lastTrafficTx != lastHealthTx || lastTrafficRx != lastHealthRx)
                 && now - lastSuccessfulHealthAt < MAX_HEALTH_VERIFICATION_GAP_MS) {
             lastHealthTx = lastTrafficTx;
             lastHealthRx = lastTrafficRx;
@@ -2585,19 +2762,36 @@ public final class AetherVpnService extends VpnService {
         }
         if (!healthCheckRunning.compareAndSet(false, true)) return;
         lastHealthCheckAt = now;
-        Intent request = activeRequest;
         sendLog("Performance ping_probe_started_after_ready=" + Math.max(0L, System.currentTimeMillis() - connectedAt) + "ms");
         try {
             worker.execute(() -> {
+                Process provingProcess = aetherProcess;
+                long provingSession = generation.get();
+                ProbeCancellation privacyProbe = new ProbeCancellation();
                 try {
-                    if (request == null || stopping || !active) return;
-                    String socks = deviceSocksAddress(request);
+                    activePrivacyHealthProbe = privacyProbe;
+                    if (request == null || !isCurrentSession(request, provingSession) || !active) return;
+                    String socks = value(request, "socks", "127.0.0.1:1819");
+                    if (ProxyMode.enabled(value(request, "connectionMode", "vpn"))) {
+                        if (!proxyListenersRespond(provingProcess)) {
+                            if (!recovering) requestCoreRecovery(getString(R.string.service_proxy_not_ready,
+                                    ProxyMode.SOCKS_ADDRESS, ProxyMode.HTTP_ADDRESS));
+                            return;
+                        }
+                        try (Socket ignored = ProxyMode.openHttpTunnel(ProxyMode.HTTP_ADDRESS, "1.1.1.1", 443, 4_000)) {
+                            // A live HTTP parser must also be able to open a tunneled stream.
+                        }
+                    }
                     lastPing = socksConnectMillis(socks, "1.1.1.1", 443, 4_000);
+                    if (privacy) verifyPrivacyHealth(request, provingSession, privacyProbe);
+                    if (!isCurrentSession(request, provingSession) || provingProcess != aetherProcess
+                            || provingProcess == null || !provingProcess.isAlive()) return;
                     lastSuccessfulHealthAt = System.currentTimeMillis();
                     consecutiveHealthFailures = 0;
                     sendLog("Performance ping_available_after_ready=" + Math.max(0L, System.currentTimeMillis() - connectedAt) + "ms value=" + lastPing);
-                    if (recovering) confirmRecoveredTunnel();
+                    if (recovering) confirmRecoveredTunnel(provingProcess);
                 } catch (Throwable error) {
+                    if (!isCurrentSession(request, provingSession) || provingProcess != aetherProcess) return;
                     lastPing = -1;
                     // monitorAether owns the retry schedule while a recovery is in flight; counting these
                     // failures as well would race a second teardown into its backoff.
@@ -2607,6 +2801,8 @@ public final class AetherVpnService extends VpnService {
                         requestCoreRecovery(getString(R.string.service_tunnel_unresponsive));
                     }
                 } finally {
+                    privacyProbe.close();
+                    if (activePrivacyHealthProbe == privacyProbe) activePrivacyHealthProbe = null;
                     healthCheckRunning.set(false);
                 }
             });
@@ -2618,12 +2814,37 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
+    private void verifyPrivacyHealth(Intent request, long session, ProbeCancellation cancellation) throws Exception {
+        RuntimeTrafficPlan.Announcements announcements = privacyAnnouncements;
+        if (announcements == null || !announcements.allAnnounced()) throw new IOException("Core privacy listeners are not ready");
+        Map<String, Object> settings = ProxyMode.settings(value(request, "connectionMode", "vpn"),
+                AndroidCoreSettings.fromIntent(request));
+        for (RuntimeTrafficPlan.Endpoint endpoint : RuntimeTrafficPlan.endpoints(settings,
+                value(request, "socks", ProxyMode.VPN_SOCKS_DEFAULT))) {
+            if (!endpoint.privacy) continue;
+            Exception failure = null;
+            for (String[] target : TRAFFIC_READY_TARGETS) {
+                if (!isCurrentSession(request, session)) throw new InterruptedException("Privacy health check cancelled");
+                try {
+                    String body = proxyHttpGet(endpoint.address, target[0], target[1],
+                            TRAFFIC_READY_TIMEOUT_MS, endpoint.http, cancellation);
+                    if (body.trim().isEmpty()) throw new IOException("Privacy HTTPS response was empty");
+                    failure = null;
+                    break;
+                } catch (IOException error) { failure = error; }
+            }
+            if (failure != null) throw new IOException(endpoint.name + " cannot carry HTTPS traffic", failure);
+        }
+        if (announcements != privacyAnnouncements || !announcements.allAnnounced())
+            throw new IOException("Core privacy listeners changed during validation");
+    }
+
     /** Publishes "connected" again once a probe has proven the recovered tunnel carries traffic. */
-    private void confirmRecoveredTunnel() {
+    private void confirmRecoveredTunnel(Process provenProcess) {
         if (stopping || !active || networkUnavailable || !connectionEstablished) return;
         if (!"reconnecting".equals(currentState)) return;
         Process process = aetherProcess;
-        if (process == null || !process.isAlive()) return;
+        if (process == null || process != provenProcess || !process.isAlive()) return;
         recoveryRestartPending.set(false);
         updateState("connected", getString(R.string.service_restored));
         updateNotification(getString(R.string.service_restored));
@@ -2672,6 +2893,7 @@ public final class AetherVpnService extends VpnService {
         // A session that is being torn down deliberately must not leave a core behind; the reaper
         // covers the case where destroy() returned before the child had actually exited.
         reapOrphanedCores();
+        boolean coreStopped = aetherProcess == null || !aetherProcess.isAlive();
         active = false;
         connectedAt = 0;
         currentEndpoint = "";
@@ -2690,7 +2912,8 @@ public final class AetherVpnService extends VpnService {
         lastHealthRx = 0;
         consecutiveHealthFailures = 0;
         if (userInitiated) {
-            updateState("disconnected", getString(R.string.service_disconnected));
+            updateState(coreStopped ? "disconnected" : "error",
+                    getString(coreStopped ? R.string.service_disconnected : R.string.service_core_still_stopping));
             sendLog("Performance disconnect teardown=" + (SystemClock.elapsedRealtime() - teardownStarted) + "ms");
         }
         if (userInitiated) {
@@ -2765,13 +2988,6 @@ public final class AetherVpnService extends VpnService {
             bridgeStarted = false;
         }
         // Deliberately outside runtimeLock: see stopBridge().
-        // Psiphon's Go controller is not a child process, so nothing reaps it
-        // for us: leaving it running holds the SOCKS port and makes the next
-        // connect fail against a tunnel nobody is listening on.
-        if (siphonChain != null) {
-            siphonChain.stop();
-            siphonChain = null;
-        }
         if (bridgeUp) stopBridge();
         synchronized (runtimeLock) {
             try { if (vpnInterface != null) vpnInterface.close(); }
@@ -2782,16 +2998,23 @@ public final class AetherVpnService extends VpnService {
     }
 
     private void stopAetherOnly() {
-        Process process = aetherProcess;
-        aetherProcess = null;
-        if (process != null) {
-            process.destroy();
-            try {
-                if (!process.waitFor(CORE_STOP_GRACE_MS, TimeUnit.MILLISECONDS)) {
-                    process.destroyForcibly();
-                    process.waitFor(CORE_STOP_GRACE_MS, TimeUnit.MILLISECONDS);
+        ProbeCancellation[] probes = activeTrafficProbes;
+        if (probes != null) for (ProbeCancellation probe : probes) probe.close();
+        ProbeCancellation healthProbe = activePrivacyHealthProbe;
+        if (healthProbe != null) healthProbe.close();
+        readinessTrace.clear();
+        stopPublicRelays();
+        synchronized (runtimeLock) {
+            Process process = aetherProcess;
+            proxyListeners = null;
+            privacyAnnouncements = null;
+            if (process != null) {
+                if (CoreProcessGuard.stop(process, CORE_STOP_GRACE_MS)) {
+                    aetherProcess = null;
+                    reapOrphanedCores();
                 }
-            } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+                else sendLog(getString(R.string.service_core_still_stopping));
+            }
         }
     }
 
@@ -2805,38 +3028,33 @@ public final class AetherVpnService extends VpnService {
     }
 
     private void updateState(String state, String message) {
-        // A connecting state must never overwrite one the user has already moved
-        // past. The chain's callbacks come from Psiphon's goroutines and can
-        // arrive after a disconnect, and each one that slipped through left the
-        // button reading "connecting" over a tunnel that was already gone. The
-        // guards on the callbacks are the first line; this is the one that holds
-        // when a caller forgets them.
-        if (stopping && !"disconnected".equals(state) && !"error".equals(state)
-                && !"blocked".equals(state) && !"disconnecting".equals(state)) {
-            sendLog("Ignoring late state '" + state + "' — the session is stopping");
-            return;
-        }
+        String previous = currentState;
         currentState = state;
         currentMessage = message == null ? "" : message;
+        // dev.020 CHANGE 9: the daily connected-time accounting follows the real state machine.
+        // Only the genuine Connected state contributes duration; every other state (including
+        // "reconnecting", "disconnecting", failures) stops the clock - failed connection
+        // attempts and time between sessions are never counted. A transition that stays within
+        // Connected (repeated connected events) is idempotent in the tracker.
+        if (connectedTime != null) {
+            if ("connected".equals(state) && !"connected".equals(previous)) connectedTime.onConnected();
+            else if (!"connected".equals(state) && "connected".equals(previous)) connectedTime.onDisconnected();
+        }
         // The tile, widget, and activity all live in this process, so a live snapshot lets them read
         // the state the service is actually in rather than whatever SharedPreferences last flushed.
         LIVE_STATE.set(state);
-        // commit(), not apply(). A disconnect writes "disconnected" and then calls
-        // stopSelf(), so the process can be gone before an asynchronous write has
-        // reached disk — and the UI, reading the persisted state back on its next
-        // refresh, finds "connecting" instead. That is the second press not being
-        // needed: the fresh service instance writes it again, and this time the
-        // write survives, which is why the button only caught up on the tap after.
         stateStore.edit().putString("state", currentState).putString("message", currentMessage).putString("endpoint", currentEndpoint)
-                .putString("selectedProtocol", selectedProtocol).putBoolean("smartSelected", smartSelected).commit();
+                .putString("connectionMode", activeRequest == null ? "" : value(activeRequest, "connectionMode", "vpn"))
+                .putString("selectedProtocol", selectedProtocol).putBoolean("smartSelected", smartSelected).apply();
         sendStatus(currentState, currentMessage);
-        MehmanshahrTileService.requestUpdate(this);
-        MehmanshahrWidgetProvider.update(this);
+        AethonTileService.requestUpdate(this);
+        AethonWidgetProvider.update(this);
     }
 
     private void sendStatus(String state, String message) {
         Intent intent = new Intent(ACTION_STATUS).setPackage(getPackageName());
         intent.putExtra("state", state).putExtra("message", message).putExtra("endpoint", currentEndpoint)
+                .putExtra("statusAtElapsed", SystemClock.elapsedRealtime())
                 .putExtra("selectedProtocol", selectedProtocol)
                 .putExtra("smartSelected", smartSelected);
         sendBroadcast(intent, INTERNAL_PERMISSION);
@@ -2884,276 +3102,9 @@ public final class AetherVpnService extends VpnService {
         }
     }
 
-    /**
-     * The identity file a transport should use.
-     *
-     * gool gets its own file rather than sharing WireGuard's, because the core
-     * stacks two WARP tunnels there and provisions a second device beside
-     * whichever primary it was given. Sharing one primary across both modes
-     * means one registered device serving two tunnels at once, with each mode's
-     * cached peer written where the other reads it. Everything else is mapped
-     * through the same table so a future transport cannot silently fall back to
-     * sharing.
-     */
-    private String identityFile(String protocol, String wireGuardFallback) {
-        String name;
-        if ("gool".equals(protocol) || "wiw".equals(protocol)
-                || "warp-in-warp".equals(protocol) || "warpinwarp".equals(protocol)) {
-            name = "aether-gool.toml";
-        } else if ("masque".equals(protocol)) {
-            name = "aether-masque.toml";
-        } else {
-            name = wireGuardFallback;
-        }
-        return new File(getFilesDir(), name).getAbsolutePath();
-    }
-
-    /**
-     * The core protocol for a requested one.
-     *
-     * Only a chained session is remapped. Every other value is passed through
-     * untouched, including ones the core will reject, so that the defaulting
-     * stays the core's single documented behaviour rather than being second-
-     * guessed here.
-     */
-    static String innerLegProtocol(String requested) {
-        String value = requested == null ? "" : requested.trim().toLowerCase(java.util.Locale.US);
-        if (!"siphon".equals(value)) return requested;
-        return SiphonChain.innerLadder()[0];
-    }
-
-    /**
-     * Start Psiphon over the core's SOCKS listener and wait for its own.
-     *
-     * The core is already up and publishing SOCKS on 1820 by the time this runs
-     * — that is the inner leg. What is missing is the outer one, and until
-     * Psiphon reports a listening port there is nothing for the hev bridge to
-     * attach to, so this blocks on that rather than returning early.
-     *
-     * @return true when Psiphon is ready to carry traffic
-     */
-    private boolean startSiphonChain(Intent request, long session) throws Exception {
-        if (siphonChain != null) siphonChain.stop();
-
-        String country = PsiphonRegions.preferred(this);
-        boolean cdn = getSharedPreferences("aether", MODE_PRIVATE)
-                .getBoolean("psiphonCdnFronting", false);
-        String entries = embeddedServerEntries();
-
-        // The inner leg first: Psiphon dials through it, so a chain with no
-        // inner leg has nothing to dial through. Each rung gets its own budget
-        // because the carrier decides which one is allowed, not the user.
-        String chosen = "";
-        for (String inner : SiphonChain.innerLadder()) {
-            if (!isCurrentSession(request, session)) return false;
-            sendLog("Chain: trying " + inner + " as the WARP leg");
-            Intent innerRequest = withProtocol(request, inner);
-            boolean up = startAetherWithMasqueFallback(innerRequest, SOCKS_TIMEOUT_MS);
-            if (up && isCurrentSession(request, session) && waitForChainSocks(session)) {
-                chosen = inner;
-                break;
-            }
-            sendLog("Chain: " + inner + " did not carry a listener; trying the next");
-            stopAetherOnly();
-        }
-        if (chosen.isEmpty()) {
-            throw new IllegalStateException(
-                    getString(R.string.service_psiphon_no_inner_leg));
-        }
-        sendLog("Chain: " + chosen + " is the WARP leg, Psiphon rides on it");
-
-        siphonChain = new SiphonChain(this, new PsiphonTunnelRunner.Listener() {
-            // Every callback here arrives on a Psiphon goroutine, and every one of
-            // them can land after the user has disconnected — the library keeps
-            // working until it is told to stop, and a chain can take tens of
-            // seconds to notice. A callback that writes state without checking
-            // is what left the button reading "connecting" over a tunnel that had
-            // already been torn down, so none of them write unguarded.
-            @Override public void onPsiphonReady(int port) {
-                if (!isCurrentSession(request, session)) return;
-                sendLog("Psiphon SOCKS listening on 127.0.0.1:" + port);
-            }
-            @Override public void onPsiphonConnecting() {
-                if (!isCurrentSession(request, session)) return;
-                updateState("scanning", getString(R.string.service_psiphon_connecting));
-            }
-            @Override public void onPsiphonConnected() {
-                if (!isCurrentSession(request, session)) return;
-                updateState("securing", getString(R.string.service_psiphon_connected));
-            }
-            @Override public void onPsiphonExiting(String reason) {
-                if (!isCurrentSession(request, session)) return;
-                sendLog("Psiphon chain stopped: " + reason);
-            }
-            @Override public void onPsiphonLog(String line) { }
-            @Override public void onPsiphonRegions(java.util.List<String> regions) { }
-        });
-        siphonChain.setCountry(country);
-        siphonChain.setCdnFronting(cdn);
-        sendLog("Starting Psiphon over " + SiphonChain.chainSocksAddress()
-                + (country == null ? "" : " in " + PsiphonRegions.name(country)));
-
-        siphonChain.start(entries);
-        long deadline = SystemClock.elapsedRealtime() + PSIPHON_TIMEOUT_MS;
-        while (SystemClock.elapsedRealtime() < deadline) {
-            if (!isCurrentSession(request, session)) return false;
-            // The chain is gone as well as the session being over. stop() clears
-            // this, and without the check the loop would keep waiting on a
-            // SiphonChain whose runner is null, which is the state a disconnect
-            // leaves behind.
-            if (siphonChain.stopped()) return false;
-            if (siphonChain.readyPort() > 0 && !bridgeStarted) {
-                // The bridge attaches on the port, because that is all it needs to
-                // be aimed somewhere real. Established earlier it would aim at the
-                // core's 1820 with nothing behind it.
-                attachChainBridge(request, session);
-            }
-            if (siphonChain.tunnelReady()) {
-                // Returning on readyPort() alone was the last thing standing between
-                // this and working. The port opens about a second after start; the
-                // tunnel arrives tens of seconds later, after every candidate has
-                // been tried and refused. Returning early let the traffic gate run
-                // against a SOCKS port with no server behind it, the gate failed,
-                // and the re-roll restarted the core — which is Psiphon's upstream,
-                // so it pulled the ground out from under a handshake still in
-                // progress:
-                //
-                //   failed to connect to 2YGk+CJD: ... dial tcp: connection refused
-                return isCurrentSession(request, session) && bridgeStarted;
-            }
-            // A chosen country that will not come up is worth one retry without
-            // the filter, not an outright failure.
-            if (siphonChain.countryAttemptExpired()
-                    && siphonChain.retryWithoutCountry(entries)) continue;
-            Thread.sleep(250L);
-        }
-        siphonChain.stop();
-        throw new IllegalStateException(getString(R.string.service_psiphon_timeout));
-    }
-
-    /** A copy of the start request aimed at a specific inner leg. */
-    private static Intent withProtocol(Intent request, String protocol) {
-        Intent copy = new Intent(request);
-        copy.putExtra("protocol", protocol);
-        copy.putExtra("requestedProtocol", protocol);
-        // Carried from the original request: a chain's inner leg is a plain WARP
-        // protocol as far as the core is concerned, so the core has to be told
-        // separately that this particular run is a chain.
-        copy.putExtra(EXTRA_CHAIN_LEG,
-                request.getBooleanExtra(EXTRA_CHAIN_LEG, false));
-        return copy;
-    }
-
-    /**
-     * Whether the core is actually serving SOCKS on the chain's port.
-     *
-     * A process that started is not a listener: the core logs its way through
-     * endpoint hunting for a long time before it binds, and returning early
-     * would hand Psiphon an upstream that refuses connections.
-     */
-    private boolean waitForChainSocks(long session) {
-        long deadline = SystemClock.elapsedRealtime() + 5_000L;
-        java.net.InetSocketAddress address = new java.net.InetSocketAddress(
-                "127.0.0.1", SiphonChain.CHAIN_PORT);
-        while (SystemClock.elapsedRealtime() < deadline) {
-            if (!isCurrentSession(activeRequest, session)) return false;
-            // A plain try rather than try-with-resources: the probe socket is
-            // closed in the finally because the success path returns from
-            // inside the try, and this loop runs for five seconds on a leg that
-            // is not coming up, so leaking one descriptor per attempt would add
-            // up.
-            java.net.Socket probe = new java.net.Socket();
-            try {
-                probe.connect(address, 500);
-                sendLog("Chain: WARP leg is serving SOCKS on "
-                        + SiphonChain.chainSocksAddress());
-                return true;
-            } catch (Exception notYet) {
-                try {
-                    Thread.sleep(200L);
-                } catch (InterruptedException woken) {
-                    // Teardown interrupts the connect worker, and a sleep that
-                    // swallows that would keep this loop polling a tunnel that
-                    // is being torn down underneath it.
-                    Thread.currentThread().interrupt();
-                    return false;
-                }
-            } finally {
-                try { probe.close(); } catch (Exception ignored) { }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Attach the HEV bridge to Psiphon's SOCKS listener.
-     *
-     * Psiphon is the outer leg, so the bridge — which is what carries device
-     * traffic off the TUN — has to point at Psiphon's port and nothing else. The
-     * core's 1820 is underneath and is not a path the device's traffic can take.
-     *
-     * The config is written with the port Psiphon reported rather than the one
-     * we asked for, because a config key that does not exist is ignored rather
-     * than rejected: the first field run bound 43471 while the bridge was
-     * configured for 1819, and the session reported connected and exited in Iran.
-     */
-    private void attachChainBridge(Intent request, long session) throws Exception {
-        int port = siphonChain.readyPort();
-        if (port <= 0) throw new IllegalStateException("Psiphon has no SOCKS port to bridge to");
-        sendLog("Chain: bridging the TUN to Psiphon on 127.0.0.1:" + port);
-        if (!awaitBridgeHandover()) {
-            throw new IllegalStateException("The previous tunnel bridge has not shut down yet");
-        }
-        ParcelFileDescriptor descriptor;
-        synchronized (runtimeLock) {
-            descriptor = vpnInterface;
-        }
-        if (descriptor == null) {
-            throw new IllegalStateException("The VPN interface is gone before the bridge attached");
-        }
-        // Rebuild the TUN config against Psiphon's port and restart the bridge on
-        // the descriptor that was established before Psiphon started.
-        File config = writeTunConfig(request, "127.0.0.1:" + port);
-        try {
-            TProxyService.TProxyStartService(config.getAbsolutePath(), descriptor.getFd());
-        } catch (UnsatisfiedLinkError error) {
-            throw new IllegalStateException("The HEV Android JNI bridge could not be loaded", error);
-        }
-        boolean orphaned;
-        synchronized (runtimeLock) {
-            orphaned = vpnInterface != descriptor;
-            if (!orphaned) bridgeStarted = true;
-        }
-        if (orphaned) {
-            stopBridge();
-            throw new IllegalStateException("The VPN interface was replaced while bridging");
-        }
-        sendLog("HEV Android TUN bridge attached to Psiphon");
-    }
-
-    /** The hex-encoded embedded server list, or empty when none is bundled. */
-    private String embeddedServerEntries() {
-        java.io.InputStream in = null;
-        try {
-            in = getAssets().open("server_entries.txt");
-            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
-            return new String(out.toByteArray(), java.nio.charset.Charset.forName("UTF-8")).trim();
-        } catch (Exception error) {
-            sendLog("No embedded server_entries.txt: " + safeMessage(error));
-            return "";
-        } finally {
-            if (in != null) {
-                try { in.close(); } catch (Exception ignored) { }
-            }
-        }
-    }
-
-    /** Package-private so the Siphon chain can report through the same log. */
-    void sendLog(String line) {
+    private void sendLog(String line) {
         if (line == null || line.trim().isEmpty()) return;
+        if (activeRequest != null) line = CoreSettings.redact(line, AndroidCoreSettings.fromIntent(activeRequest));
         Log.i(TAG, line);
         synchronized (logLock) {
             if (logHistory.length() > 0) logHistory.append('\n');
@@ -3211,7 +3162,7 @@ public final class AetherVpnService extends VpnService {
         Intent open = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent content = PendingIntent.getActivity(this, 2, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification alert = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_app_mono)
+                .setSmallIcon(R.drawable.ic_aethon_mono)
                 .setContentTitle(getString(R.string.service_protection_lost_title))
                 .setContentText(getString(R.string.service_protection_lost, reason))
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(getString(R.string.service_protection_lost, reason)))
@@ -3235,7 +3186,7 @@ public final class AetherVpnService extends VpnService {
         Intent stop = new Intent(this, AetherVpnService.class).setAction(ACTION_STOP);
         PendingIntent disconnect = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_app_mono)
+                .setSmallIcon(R.drawable.ic_aethon_mono)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setOngoing(true)
@@ -3282,21 +3233,12 @@ public final class AetherVpnService extends VpnService {
         if (VpnConnectionController.canDisconnect(currentState)) {
             currentState = "disconnected";
             currentMessage = getString(R.string.service_disconnected);
-            // commit(), and broadcast, for the same reason updateState does.
-            // This is the last writer in a disconnect and the instance dies
-            // immediately after, so an unannounced apply() left the activity
-            // showing whatever was persisted before, and the user had to press
-            // again for a fresh instance to announce it. Anything that is
-            // connecting is by definition over.
-            stateStore.edit().putString("state", currentState).putString("message", currentMessage)
-                    .putString("endpoint", "").putString("selectedProtocol", "")
-                    .putBoolean("smartSelected", false).commit();
-            sendStatus(currentState, currentMessage);
+            stateStore.edit().putString("state", currentState).putString("message", currentMessage).putString("endpoint", "").apply();
         }
         // No instance is left to answer for the live state; the tile falls back to the persisted
         // value combined with its own ConnectivityManager cross-check.
         LIVE_STATE.set(null);
-        MehmanshahrTileService.requestUpdate(this);
+        AethonTileService.requestUpdate(this);
         telemetry.shutdownNow();
         lifecycle.shutdownNow();
         worker.shutdownNow();
@@ -3308,6 +3250,34 @@ public final class AetherVpnService extends VpnService {
     private static String value(Intent intent, String key, String fallback) {
         String result = intent.getStringExtra(key);
         return result == null || result.trim().isEmpty() ? fallback : result.trim();
+    }
+
+    // --- dev.020 CHANGE 9: connected-time tracker platform adapters ---------------------------
+
+    /** The tracker's clock bound to the platform's monotonic and calendar sources. */
+    private static ConnectedTimeTracker.Clock connectedTimeClock() {
+        return new ConnectedTimeTracker.Clock() {
+            @Override public long elapsedRealtimeMillis() { return SystemClock.elapsedRealtime(); }
+            @Override public java.time.LocalDate localDate() { return java.time.LocalDate.now(); }
+            @Override public long wallClockMillis() { return System.currentTimeMillis(); }
+        };
+    }
+
+    /** The tracker's persistence bound to the dedicated "connected_time" SharedPreferences. */
+    private ConnectedTimeTracker.Store connectedTimeStore() {
+        SharedPreferences prefs = getSharedPreferences(ConnectedTimeTracker.PREFS, MODE_PRIVATE);
+        return new ConnectedTimeTracker.Store() {
+            @Override public String readDay() { return prefs.getString(ConnectedTimeTracker.KEY_DAY, ""); }
+            @Override public long readSeconds() { return prefs.getLong(ConnectedTimeTracker.KEY_SECONDS, 0L); }
+            @Override public long readLastKnownElapsed() { return prefs.getLong(ConnectedTimeTracker.KEY_LAST_ELAPSED, 0L); }
+            @Override public void write(String day, long seconds, long lastKnownElapsed) {
+                prefs.edit()
+                        .putString(ConnectedTimeTracker.KEY_DAY, day)
+                        .putLong(ConnectedTimeTracker.KEY_SECONDS, seconds)
+                        .putLong(ConnectedTimeTracker.KEY_LAST_ELAPSED, lastKnownElapsed)
+                        .apply();
+            }
+        };
     }
 
     private static String safeMessage(Throwable error) {
@@ -3332,12 +3302,18 @@ public final class AetherVpnService extends VpnService {
     static int effectiveMtu(String protocol, int configured) {
         int transportCap;
         if ("gool".equals(protocol)) transportCap = NESTED_WIREGUARD_MTU_CAP;
+        else if ("mim".equals(protocol)) transportCap = MIN_MTU;
         else if ("wg".equals(protocol)) transportCap = WIREGUARD_MTU_CAP;
         else transportCap = MASQUE_MTU_CAP;
         return Math.max(MIN_MTU, Math.min(transportCap, configured));
     }
 
+    private static boolean usesWarp(Intent request) {
+        return PsiphonConfiguration.usesWarp(value(request, "psiphonMode", "off"));
+    }
+
     private static String reliableEndpoint(Intent request) {
+        if (!usesWarp(request)) return "";
         String peer = request.getStringExtra("peer");
         return peer == null ? "" : peer.trim();
     }

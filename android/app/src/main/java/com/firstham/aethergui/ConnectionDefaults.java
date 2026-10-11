@@ -2,19 +2,23 @@ package com.firstham.aethergui;
 
 final class ConnectionDefaults {
     /**
-     * Index 1 of {@code R.array.protocol_labels} is WireGuard. Gool was the
-     * fresh-install default, but it is a research client's own transport and a
-     * paid app that ships it as the default is just a front for the free one.
+     * Fresh-install / Reset-Defaults protocol. PRODUCT POLICY (MehmanshahrVpn): the default is
+     * plain WireGuard, not a combined privacy chain. gool is the Aether project's own
+     * transport; shipping one of its combined modes as the default of a paid client would make
+     * that client read as a front for the free one. Every combined mode stays fully selectable --
+     * this only decides what a fresh install and Reset Defaults start on.
+     * The value is the STORAGE index into {@code VpnConnectionController.PROTOCOLS}, where index
+     * 1 is "wg" (plain WireGuard). An existing user's saved protocol is never overwritten by
+     * an upgrade; {@code PreferenceSchemaMigration} remaps a stored index once, at first run.
      */
     static final int PROTOCOL_INDEX = 1;
+    static final String PROTOCOL = "wg";
     /**
-     * Fresh-install default; an existing preference value always wins at the call site. Index 0 of
-     * {@code R.array.scan_labels} is Balanced, matching {@code VpnConnectionController.SCANS}.
-     * Turbo is unchanged and still selectable - only which mode a new install starts on moved.
+     * Missing/reset preference default. Keep the array order stable: saved choices always win.
+     * Index 1 is Turbo in both {@code R.array.scan_labels} and the controller's scan mapping.
      */
-    static final int SCAN_INDEX = 0;
-    static final String PROTOCOL = "wireguard";
-    static final String SCAN = "balanced";
+    static final int SCAN_INDEX = 1;
+    static final String SCAN = "turbo";
     static final int OBFUSCATION_INDEX = 2;
     static final String OBFUSCATION = "balanced";
     static final String SMART_PROTOCOL = "smart";
@@ -29,6 +33,12 @@ final class ConnectionDefaults {
     static final String TRANSPORT = "h2";
     /** Automatic MTU is the fresh-install default; a stored "manual" value always wins. */
     static final String MTU_MODE = "automatic";
+
+    static String normalizedScanMode(String requested) {
+        if (requested == null) return SCAN;
+        String mode = requested.trim().toLowerCase(java.util.Locale.ROOT);
+        return "stealth".equals(mode) || "quiet".equals(mode) || "proven".equals(mode) ? "verified" : mode;
+    }
 
     private ConnectionDefaults() { }
 }

@@ -77,3 +77,11 @@ native-inputs/*
 !native-inputs/android/
 native-inputs/android/*
 !native-inputs/android/*.json
+
+# Signing material - never commit. GitHub Secrets are the only place these belong.
+android/.android-signing/
+*.jks
+*.keystore
+*.p12
+*.pfx
+signing.properties

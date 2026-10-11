@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { translations } from '../src/i18n.js';
@@ -510,7 +510,8 @@ test('About: version, core version, links, Telegram; no development diagnostics'
   assert.match(html, /id="aboutCoreVersion"/);
   assert.match(html, /id="aboutTelegram"/);
   assert.match(html, /CluvexStudio\/Aether/);
-  assert.match(html, /hamvex\/AetherGUI/);
+  // MehmanshahrVpn is the application; the original Aether credit above must stay.
+  assert.match(html, /leverpol9797\/MehmanshahrVpn/);
   assert.match(app, /refreshAboutCore/);
   assert.match(app, /tg:\/\/resolve\?domain=hamvex/);
   // No dev diagnostics in consumer About.
@@ -519,7 +520,7 @@ test('About: version, core version, links, Telegram; no development diagnostics'
   const about = html.slice(aboutStart, aboutEnd);
   assert.ok(!about.includes('id="diag'));
   // No duplicate version labels.
-  assert.equal((about.match(/v2\.2\.0/g) || []).length, 1);
+  assert.equal((about.match(/v2\.5\.4/g) || []).length, 1);
 });
 
 test('Windows VPN lifecycle retains elevation, recovery, TUN readiness, and clean shutdown', async () => {
