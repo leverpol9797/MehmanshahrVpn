@@ -5,7 +5,10 @@
 # payload digest, and the payload size all have to agree with the manifest.
 set -euo pipefail
 
-REPO="$HOME/MehmanshahrVpn"
+# Resolve the repo root from this script's own location rather than $HOME: the checkout path
+# differs between a developer machine and a CI runner, and a hardcoded one silently resolves
+# to a directory that exists in exactly one of them.
+REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 EVID="$REPO/native-inputs/android"
 JNI="$EVID/verified-jni"
 HELPERS="$EVID/verified-helpers"
