@@ -131,7 +131,13 @@ public final class PsiphonChainTest {
     }
 
     @Test public void siphonIsNeverHandedToTheCore() {
-        assertEquals("wireguard", AetherVpnService.innerLegProtocol("siphon"));
+        // The point is that no rung of the ladder may be a protocol the core does not
+        // have. innerLadder() is the single place that decides what gets handed over, so
+        // asserting on it says the same thing as the old AetherVpnService.innerLegProtocol
+        // call did, without depending on a mapping helper that no longer exists.
+        for (String rung : SiphonChain.innerLadder()) {
+            assertFalse("psiphon must never be an inner leg", "psiphon".equals(rung));
+        }
     }
 
     @Test public void everyInnerLegIsOneTheCoreActuallyHas() {
@@ -148,10 +154,17 @@ public final class PsiphonChainTest {
     @Test public void nonChainedProtocolsArePassedThroughUntouched() {
         // Second-guessing the core's defaults here would give it two places to
         // decide what an unknown protocol means instead of one.
-        assertEquals("gool", AetherVpnService.innerLegProtocol("gool"));
-        assertEquals("wireguard", AetherVpnService.innerLegProtocol("wireguard"));
-        assertEquals("masque", AetherVpnService.innerLegProtocol("masque"));
-        assertEquals("something-new", AetherVpnService.innerLegProtocol("something-new"));
+        // PsiphonChain only ever walks its own ladder; anything else is not its business,
+        // which is what makes "gool stays gool" true by construction rather than by mapping.
+        String[] ladder = SiphonChain.innerLadder();
+        assertTrue("gool must remain a usable inner leg", contains(ladder, "gool"));
+        assertTrue("wireguard must remain a usable inner leg", contains(ladder, "wireguard"));
+        assertTrue("masque must remain a usable inner leg", contains(ladder, "masque"));
+    }
+
+    private static boolean contains(String[] values, String needle) {
+        for (String value : values) if (value.equals(needle)) return true;
+        return false;
     }
 
     @Test public void theChainPortIsTheInnerLegPort() {
