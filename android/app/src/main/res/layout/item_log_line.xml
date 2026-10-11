@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One log line. The marker is part of the text and is coloured with the rest of the line
+    rather than living in its own view: a line is read as a whole, and a separate TextView for a
+    single character costs a view per line, which at a few thousand lines is a few thousand views.
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/logLineText"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp"
+    android:textSize="12sp"
+    android:lineSpacingMultiplier="1.15"
+    android:textIsSelectable="true"
+    android:textColor="@color/log_info" />

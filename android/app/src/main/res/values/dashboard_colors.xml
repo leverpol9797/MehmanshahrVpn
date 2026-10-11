@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The dashboard's own palette. Kept separate from colors.xml so the dark surfaces can be
+        replaced without touching the colours the existing settings screens use.
+
+        Surfaces step up in lightness from app_background to surface_raised, which is what gives
+        the cards their edge without a shadow on API levels that make shadows expensive.
+    -->
+    <color name="app_background">#0B1020</color>
+    <color name="surface">#141A2E</color>
+    <color name="surface_raised">#1C2340</color>
+    <color name="surface_sunken">#0A0E1B</color>
+    <color name="app_border">#2A3355</color>
+
+    <color name="app_text">#EEF2FF</color>
+    <color name="app_text_muted">#96A0C0</color>
+    <color name="app_text_faint">#66708F</color>
+
+    <color name="app_accent">#5B8DEF</color>
+    <color name="app_accent_pressed">#4472D6</color>
+    <color name="app_accent_soft">#1E2A4D</color>
+
+    <!-- State colours. The connected state is the only saturated green in the app, so a
+         glance at the button is enough to tell whether traffic is being carried. -->
+    <color name="state_connected">#22C98E</color>
+    <color name="state_connected_soft">#11301F</color>
+    <color name="state_connecting">#F0B429</color>
+    <color name="state_connecting_soft">#332A10</color>
+    <color name="state_error">#F0554F</color>
+    <color name="state_error_soft">#3A1717</color>
+    <color name="state_idle">#96A0C0</color>
+
+    <!-- Log terminal. One hue per level so filtering by level also filters by colour. -->
+    <color name="log_info">#A8B4D8</color>
+    <color name="log_progress">#7C89B8</color>
+    <color name="log_success">#22C98E</color>
+    <color name="log_warn">#F0B429</color>
+    <color name="log_error">#F0554F</color>
+    <color name="log_meta">#66708F</color>
+</resources>

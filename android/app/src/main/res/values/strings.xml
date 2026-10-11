@@ -340,4 +340,17 @@
     <string name="tor_location_read_only">Location is chosen by the Tor network</string>
     
     
+    <string name="log_terminal">گزارش هسته</string>
+    <string name="log_follow">دنبال کردن</string>
+    <string name="log_no_matches">با فیلترهای فعلی خطی نمایش داده نمی‌شود.</string>
+    <string name="log_reset_network">بازنشانی شبکه</string>
+    <string name="log_disconnect">قطع اتصال</string>
+    <string name="log_level_info">اطلاعات</string>
+    <string name="log_level_progress">پیشرفت</string>
+    <string name="log_level_success">موفق</string>
+    <string name="log_level_warn">هشدار</string>
+    <string name="log_level_error">خطا</string>
+    <string name="log_level_meta">آمار</string>
+    <string name="log_filter_all">همه</string>
+    <string name="log_copy_failed">کپی گزارش ممکن نشد.</string>
 </resources>

@@ -1,0 +1,25 @@
+[2026-09-28T04:52:06.100Z INFO  aether] Aether v2.3.0
+[2026-09-28T04:52:06.140Z INFO  aether] cpu: 8 cores, ram: 7916 MiB available of 8011 MiB
+[2026-09-28T04:52:06.141Z INFO  aether] raised the open-file limit to 1048576
+[2026-09-28T04:52:06.182Z INFO  aether] egress: direct, no upstream proxy configured
+[2026-09-28T04:52:06.190Z INFO  aether] [*] probing the WARP API for a usable endpoint
+[2026-09-28T04:52:06.180Z INFO  aether] [*] hunting for a working MASQUE gateway (deep connect-ip + data validation)
+[2026-09-28T04:52:06.910Z INFO  aether] [-] 162.159.192.1:2408 did not answer the handshake, skipping it
+[2026-09-28T04:52:07.402Z INFO  aether] [*] validating MASQUE tunnel with 162.159.192.79:443 (quic)
+[2026-09-28T04:52:07.980Z INFO  aether] [!] QUIC v2 opener returned no candidates, falling back to a direct dial
+[2026-09-28T04:52:08.771Z INFO  aether] [!] could not enable warp for the masque device, the edge may reject it
+[2026-09-28T04:52:11.206Z INFO  aether] [+] masq: outer endpoint 162.159.192.79:443 validated, colo sfo
+[2026-09-28T04:52:11.207Z INFO  aether] [*] establishing outer MASQUE tunnel to 162.159.192.79:443...
+[2026-09-28T04:52:13.884Z INFO  aether] [+] socks5 server listening on 127.0.0.1:1819
+[2026-09-28T04:52:13.885Z INFO  aether] [+] http proxy listening on 127.0.0.1:1820
+[2026-09-28T04:52:13.890Z INFO  aether] [*] binding the http/2 carrier as the fallback path
+[2026-09-28T04:52:14.010Z INFO  aether] [*] Zero Trust skipped; staying on personal WARP
+[2026-09-28T04:52:14.512Z INFO  aether] [-] the first gateway stopped answering, retrying the saved one
+[2026-09-28T04:52:15.553Z INFO  aether] [+] the tunnel is up
+[2026-09-28T04:52:15.554Z INFO  aether] [+] endpoint 162.159.192.79:443 will be tried first next run
+[2026-09-28T04:52:15.560Z INFO  aether] [*] dns inside the tunnel: udp://1.1.1.1:53, udp://8.8.8.8:53
+[2026-09-28T04:52:16.002Z INFO  aether] [+] the tunnel is up
+[2026-09-28T04:52:40.000Z INFO  aether] [=] up 1.2 MB down 18.4 MB uptime 00:00:25
+[2026-09-28T04:53:10.000Z INFO  aether] [=] up 2.9 MB down 47.1 MB uptime 00:00:55
+[2026-09-28T04:53:40.000Z INFO  aether] [=] up 4.1 MB down 92.6 MB uptime 00:01:25
+[2026-09-28T04:53:41.120Z INFO  aether] [=] up 4.3 MB down 101.9 MB uptime 00:01:26

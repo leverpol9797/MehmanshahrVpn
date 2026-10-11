@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The toggle behind the log filter chips and the "follow" label. A selector rather than a
+    solid colour so the pressed state reads on both the dark terminal and the light settings
+    screens, where the same chip style is reused.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/app_accent_soft" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/surface_raised" />
+            <stroke android:width="1dp" android:color="@color/app_border" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+</selector>

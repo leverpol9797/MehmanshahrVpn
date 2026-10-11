@@ -338,4 +338,17 @@
     <string name="reset_confirmation_title">Reset settings?</string>
     <string name="reset_confirmation_message">This will restore Aethon\'s configuration defaults.</string>
     <string name="tor_location_read_only">Location is chosen by the Tor network</string>
+    <string name="log_terminal">Core log</string>
+    <string name="log_follow">Follow</string>
+    <string name="log_no_matches">No lines match the current filters.</string>
+    <string name="log_reset_network">Reset network</string>
+    <string name="log_disconnect">Disconnect</string>
+    <string name="log_level_info">Info</string>
+    <string name="log_level_progress">Progress</string>
+    <string name="log_level_success">Success</string>
+    <string name="log_level_warn">Warning</string>
+    <string name="log_level_error">Error</string>
+    <string name="log_level_meta">Stats</string>
+    <string name="log_filter_all">All</string>
+    <string name="log_copy_failed">Could not copy the log.</string>
 </resources>
