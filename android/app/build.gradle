@@ -156,6 +156,14 @@ tasks.register('verifyAetherPayloads') {
 }
 tasks.named('preBuild').configure { dependsOn 'verifyAetherPayloads' }
 
+// Where the native payloads actually live. The integrity tests read through this property so
+// they check the same files that get packaged rather than a separate staging copy: the old
+// verified-native.gradle pointed them at native-inputs/android/verified-jni, which no longer
+// exists now that the unsatisfiable manifest chain is gone.
+tasks.withType(Test).configureEach {
+    systemProperty 'aethon.nativeInputs', file('src/main/jniLibs').absolutePath
+}
+
 // ---------------------------------------------------------------------------------
 // NATIVE RUNTIME PINNING
 //

@@ -87,7 +87,7 @@
 
     <string name="connection_mode">Connection mode</string>
     <string name="vpn_mode">Device VPN</string>
-    <string name="proxy_mode">SOCKS5 proxy</string>
+    <string name="proxy_mode">پروکسی</string>
     <string name="smart_mode">Smart Connect</string>
     <string name="smart_mode_summary">Test every protocol and choose the fastest reliable route.</string>
     <string name="protocol">Protocol</string>
@@ -185,7 +185,7 @@
     <string name="service_disconnected">Disconnected safely</string>
     <string name="service_smart_testing">Testing MASQUE, WireGuard, and WARP-in-WARP</string>
     <string name="service_scanning">Scanning for a verified gateway</string>
-    <string name="service_proxy_ready">Local SOCKS5 proxy is ready</string>
+    <string name="service_proxy_ready">پروکسی محلی آماده است (SOCKS5 و HTTP)</string>
     <string name="service_proxy_connected">SOCKS5 proxy is connected</string>
     <string name="service_protected">Your device traffic is protected</string>
     <string name="service_traffic_checking">Verifying internet traffic</string>
@@ -341,4 +341,10 @@
     <string name="reset_confirmation_title">Reset settings?</string>
     <string name="reset_confirmation_message">This will restore Aethon\'s configuration defaults.</string>
     <string name="tor_location_read_only">Location is chosen by the Tor network</string>
+    <string name="service_proxy_port_unavailable">%1$s نمی‌تواند روی %2$s اجرا شود. پورت اشغال است یا در دسترس نیست.</string>
+    <string name="proxy_mode_summary">HTTP
+%1$s
+
+SOCKS5
+%2$s</string>
 </resources>
