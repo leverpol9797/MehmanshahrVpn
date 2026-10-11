@@ -113,14 +113,12 @@ public final class PsiphonConfigurationTest {
         Element manual = widget(layout, "region_manual_input");
         assertEquals("@string/psiphon_region_manual_help", ((Element) manual.getParentNode()).getAttribute("app:helperText"));
         assertEquals("gone", ((Element) manual.getParentNode()).getAttribute("android:visibility"));
-        // dev.017 CHANGE 14: Home shows LOCATION, not NODE, and no "Tap to secure" remains.
-        NodeList homeLabels = resource("values/strings.xml").getElementsByTagName("string");
-        String nodeLabel = null;
-        for (int index = 0; index < homeLabels.getLength(); index++) {
-            Element string = (Element) homeLabels.item(index);
-            if ("node_label".equals(string.getAttribute("name"))) nodeLabel = string.getTextContent();
-        }
-        assertEquals("LOCATION", nodeLabel);
+        // dev.017 CHANGE 14: Home shows LOCATION, not NODE. The layout binds location_label;
+        // node_label is the name it replaced and nothing references it any more, so this reads
+        // the label the screen actually uses rather than the retired one.
+        assertEquals("LOCATION", strings(resource("values/strings.xml")).get("location_label"));
+        assertFalse("node_label is retired and must not come back",
+                strings(resource("values/strings.xml")).containsKey("node_label"));
     }
 
     private static Document resource(String relative) throws Exception {

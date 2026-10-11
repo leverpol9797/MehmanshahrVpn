@@ -92,8 +92,15 @@ public final class ConnectionDefaultsTest {
 
     @Test public void legacySmartModeMigratesToSmartProtocol() {
         assertEquals("vpn", VpnConnectionController.normalizedMode("smart"));
-        assertEquals(3, VpnConnectionController.normalizedProtocolIndex("smart", 2));
+        assertEquals(indexOfProtocol("smart"), VpnConnectionController.normalizedProtocolIndex("smart", 2));
         assertEquals("manual", VpnConnectionController.normalizedMode("manual"));
         assertEquals(1, VpnConnectionController.normalizedProtocolIndex("vpn", 1));
+    }
+    /** Where a protocol sits in the controller's list, so the assertion states the property
+     *  rather than a slot that moves whenever the list is reordered. */
+    private static int indexOfProtocol(String name) {
+        for (int i = 0; i < VpnConnectionController.PROTOCOLS.length; i++)
+            if (name.equals(VpnConnectionController.PROTOCOLS[i])) return i;
+        return -1;
     }
 }

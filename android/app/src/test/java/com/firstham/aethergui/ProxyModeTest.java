@@ -24,7 +24,7 @@ public final class ProxyModeTest {
         assertEquals("127.0.0.1:1080", ProxyMode.socksAddress("vpn", "127.0.0.1:1080"));
         assertEquals("127.0.0.1:1819", ProxyMode.socksAddress("vpn", null));
         assertEquals("vpn", VpnConnectionController.normalizedMode("smart"));
-        assertEquals(3, VpnConnectionController.normalizedProtocolIndex("smart", 0));
+        assertEquals(indexOfProtocol("smart"), VpnConnectionController.normalizedProtocolIndex("smart", 0));
     }
 
     @Test public void proxyAlwaysUsesTheCoreHttpListenerAt1818WithoutMutatingSavedValues() {
@@ -269,5 +269,12 @@ public final class ProxyModeTest {
         @Override public void close() throws Exception {
             try { finished(); } finally { server.close(); worker.shutdownNow(); }
         }
+    }
+    /** Smart Connect's slot in the controller's list, looked up rather than written down:
+     *  the position is not the property, resolving to the right protocol is. */
+    private static int indexOfProtocol(String name) {
+        for (int i = 0; i < VpnConnectionController.PROTOCOLS.length; i++)
+            if (name.equals(VpnConnectionController.PROTOCOLS[i])) return i;
+        return -1;
     }
 }

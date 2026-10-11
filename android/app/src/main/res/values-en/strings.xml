@@ -74,7 +74,6 @@
     <string name="ping_value">%1$s</string>
     <string name="session_label">Traffic</string>
     <string name="latency_label">Ping</string>
-    <string name="node_label">NODE</string>
     <string name="upload_label">&#x2191; Upload</string>
     <string name="download_label">&#x2193; Download</string>
     <string name="ping_label">Ping</string>

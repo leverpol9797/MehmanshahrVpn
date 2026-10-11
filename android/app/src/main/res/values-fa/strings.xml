@@ -45,7 +45,6 @@
     <!-- dev.020 CHANGE 9: the Home daily connected-time section label. -->
     <string name="time_label">زمان</string>
 
-    <string name="node_label">موقعیت</string>
     <string name="location_label">موقعیت</string>
     <string name="location_selector_hint">انتخاب کشور خروجی</string>
     <string name="widget_connect">اتصال</string>
