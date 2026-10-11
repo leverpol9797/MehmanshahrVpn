@@ -341,10 +341,6 @@
     <string name="reset_confirmation_title">Reset settings?</string>
     <string name="reset_confirmation_message">This will restore Aethon\'s configuration defaults.</string>
     <string name="tor_location_read_only">Location is chosen by the Tor network</string>
-    <string name="service_proxy_port_unavailable">%1$s نمی‌تواند روی %2$s اجرا شود. پورت اشغال است یا در دسترس نیست.</string>
-    <string name="proxy_mode_summary">HTTP
-%1$s
-
-SOCKS5
-%2$s</string>
+    
+    
 </resources>
