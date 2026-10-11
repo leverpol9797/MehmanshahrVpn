@@ -6,86 +6,101 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 /**
  * A window onto what the core actually said.
  *
- * The service has always read the core's output and broadcast it as
- * ACTION_LOG — and nothing has ever received that broadcast. The lines went
- * into logcat and into a preference, which is a report nobody asked for: when a
- * transport failed there was nowhere to look, so the failure could only be
- * described from the outside as "it does not work".
+ * <p>The service reads the core's output and broadcasts it as {@code ACTION_LOG}. This is the
+ * end of that broadcast, and the reason the log can be copied in one tap: whoever hits a
+ * transport that will not come up can paste the actual error instead of describing the symptom.
  *
- * This activity is the missing end of that broadcast, and the reason it can be
- * copied to the clipboard in one tap: the next person to hit a transport that
- * will not come up can paste the actual error instead of guessing at it.
+ * <p>The lines are rendered through {@link LogTerminal}, which classifies them and filters by
+ * level. Two things are kept from the previous version of this screen: the service's stored
+ * buffer is read on open so a screen opened mid-session starts with history, and Clear also tells
+ * the service to drop its copy rather than only emptying the view.
  */
-public final class LogActivity extends android.app.Activity {
+public final class LogActivity extends AppCompatActivity {
 
-    private final StringBuilder text = new StringBuilder();
-    private TextView view;
+    private LogTerminal terminal;
+    private boolean receiverRegistered = false;
+
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String lines = intent.getStringExtra("lines");
             if (lines == null || lines.trim().isEmpty()) return;
-            if (text.length() > 0) text.append('\n');
-            text.append(lines);
-            render();
+            for (String line : lines.split("\n")) terminal.append(line);
         }
     };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_log);
+        // Built from the include subtree, not from the Activity root: an id declared inside an
+        // <include> is not reliably reachable from the parent view, and a null view here
+        // would crash the screen on open rather than fail the build.
+        terminal = new LogTerminal(findViewById(R.id.logTerminalHost));
 
-        view = findViewById(R.id.log_text);
-        findViewById(R.id.log_copy).setOnClickListener(v -> copy());
-        findViewById(R.id.log_clear).setOnClickListener(v -> clear());
-        findViewById(R.id.log_close).setOnClickListener(v -> finish());
+        View host = findViewById(R.id.logTerminalHost);
+        host.findViewById(R.id.logCopyButton).setOnClickListener(v -> copy());
+        host.findViewById(R.id.logClearButton).setOnClickListener(v -> clear());
+        findViewById(R.id.logClose).setOnClickListener(v -> finish());
+        host.findViewById(R.id.logDisconnectButton).setOnClickListener(v ->
+                VpnConnectionController.disconnect(this));
 
-        // Whatever the service already collected before this screen opened.
-        // Same file the service writes through its own stateStore.
+        // Whatever the service collected before this screen opened.
         String existing = getSharedPreferences("service_state", Context.MODE_PRIVATE)
                 .getString("logs", "");
-        if (existing != null) text.append(existing);
-        render();
+        if (existing != null && !existing.isEmpty())
+            for (String line : existing.split("\n")) terminal.append(line);
     }
 
     @Override protected void onStart() {
         super.onStart();
-        IntentFilter filter = new IntentFilter(AetherVpnService.ACTION_LOG);
-        filter.addCategory(Intent.CATEGORY_DEFAULT);
-        registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        if (!receiverRegistered) {
+            IntentFilter filter = new IntentFilter(AetherVpnService.ACTION_LOG);
+            filter.addCategory(Intent.CATEGORY_DEFAULT);
+            ContextCompat.registerReceiver(this, receiver, filter, INTERNAL_PERMISSION,
+                    null, ContextCompat.RECEIVER_NOT_EXPORTED);
+            receiverRegistered = true;
+        }
     }
 
     @Override protected void onStop() {
         super.onStop();
-        try { unregisterReceiver(receiver); } catch (IllegalArgumentException ignored) { }
-    }
-
-    private void render() {
-        if (view == null) return;
-        view.setText(text.length() == 0 ? getString(R.string.log_empty) : text.toString());
+        if (receiverRegistered) {
+            try { unregisterReceiver(receiver); } catch (IllegalArgumentException ignored) { }
+            receiverRegistered = false;
+        }
     }
 
     private void copy() {
-        if (text.length() == 0) return;
+        String text = terminal.asText();
+        if (text.isEmpty()) {
+            Toast.makeText(this, R.string.log_empty, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // The clipboard is the only export here; writing a file to shared storage needs a
+        // permission that a read-only screen has no reason to hold.
         android.content.ClipboardManager clipboard =
                 (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard == null) return;
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
-                getString(R.string.log_title), text.toString()));
-        android.widget.Toast.makeText(this, R.string.log_copied, android.widget.Toast.LENGTH_SHORT).show();
+        if (clipboard == null) {
+            Toast.makeText(this, R.string.log_copy_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("aether-log", text));
+        Toast.makeText(this, R.string.log_copied, Toast.LENGTH_SHORT).show();
     }
 
     private void clear() {
-        text.setLength(0);
-        send(new Intent(AetherVpnService.ACTION_CLEAR_LOGS).setPackage(getPackageName()));
-        render();
-    }
-
-    private void send(Intent intent) {
-        try { startService(intent); } catch (IllegalStateException ignored) { }
+        terminal.clear();
+        try {
+            startService(new Intent(this, AetherVpnService.class)
+                    .setAction(AetherVpnService.ACTION_CLEAR_LOGS));
+        } catch (IllegalStateException ignored) {
+            // Nothing to clear if the service is not running; the view is empty either way.
+        }
     }
 }

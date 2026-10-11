@@ -182,7 +182,7 @@ public final class LoginActivity extends AppCompatActivity {
     }
 
     private void openMain() {
-        startActivity(new Intent(this, MainActivity.class));
+        startActivity(new Intent(this, DashboardActivity.class));
         finish();
     }
 

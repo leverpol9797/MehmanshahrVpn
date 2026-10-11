@@ -351,4 +351,24 @@
     <string name="log_level_meta">Stats</string>
     <string name="log_filter_all">All</string>
     <string name="log_copy_failed">Could not copy the log.</string>
+    <string name="dashboard_connect">Connect</string>
+    <string name="dashboard_disconnect">Disconnect</string>
+    <string name="dashboard_connecting">Connecting</string>
+    <string name="dashboard_latency">Latency</string>
+    <string name="dashboard_uptime">Uptime</string>
+    <string name="dashboard_port">Local port</string>
+    <string name="dashboard_mode_title">Access mode</string>
+    <string name="dashboard_mode_proxy">SOCKS5 proxy</string>
+    <string name="dashboard_mode_vpn">System VPN</string>
+    <string name="dashboard_mode_proxy_summary">Only apps configured to use the proxy send traffic. No admin rights.</string>
+    <string name="dashboard_mode_vpn_summary">All device traffic goes through the tunnel. Android asks for permission.</string>
+    <string name="dashboard_tunnel_title">Tunnel</string>
+    <string name="dashboard_all_settings">All settings</string>
+    <string name="dashboard_upload">Sent</string>
+    <string name="dashboard_download">Received</string>
+    <string name="dashboard_state_idle">Ready</string>
+    <string name="dashboard_state_connecting">Connecting…</string>
+    <string name="dashboard_state_connected">Connected</string>
+    <string name="dashboard_state_error">Error</string>
+    <string name="dashboard_permission_needed">System VPN mode needs permission</string>
 </resources>

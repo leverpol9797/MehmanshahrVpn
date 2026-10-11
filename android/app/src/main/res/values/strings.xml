@@ -353,4 +353,24 @@
     <string name="log_level_meta">آمار</string>
     <string name="log_filter_all">همه</string>
     <string name="log_copy_failed">کپی گزارش ممکن نشد.</string>
+    <string name="dashboard_connect">اتصال</string>
+    <string name="dashboard_disconnect">قطع اتصال</string>
+    <string name="dashboard_connecting">در حال اتصال</string>
+    <string name="dashboard_latency">تأخیر</string>
+    <string name="dashboard_uptime">مدت</string>
+    <string name="dashboard_port">پورت محلی</string>
+    <string name="dashboard_mode_title">حالت دسترسی</string>
+    <string name="dashboard_mode_proxy">پروکسی SOCKS5</string>
+    <string name="dashboard_mode_vpn">VPN سراسری</string>
+    <string name="dashboard_mode_proxy_summary">فقط برنامه‌هایی که پروکسی را تنظیم کرده‌اند ترافیک می‌فرستند. بدون دسترسی مدیر.</string>
+    <string name="dashboard_mode_vpn_summary">همهٔ ترافیک دستگاه از تونل رد می‌شود. اندروید اجازه می‌خواهد.</string>
+    <string name="dashboard_tunnel_title">تونل</string>
+    <string name="dashboard_all_settings">همهٔ تنظیمات</string>
+    <string name="dashboard_upload">ارسال</string>
+    <string name="dashboard_download">دریافت</string>
+    <string name="dashboard_state_idle">آماده</string>
+    <string name="dashboard_state_connecting">در حال اتصال…</string>
+    <string name="dashboard_state_connected">متصل</string>
+    <string name="dashboard_state_error">خطا</string>
+    <string name="dashboard_permission_needed">برای حالت VPN سیستمی اجازه لازم است</string>
 </resources>
